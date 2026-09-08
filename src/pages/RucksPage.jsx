@@ -1,4 +1,16 @@
 import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from 'recharts'
+
+import {
   useEffect,
   useMemo,
   useState
@@ -33,6 +45,8 @@ function RucksPage({
     setSelectedPossession
   ] = useState(null)
 
+  const [teamFilter, setTeamFilter] =
+  useState('all')
 
     useEffect(() => {
     if (matchId) {
@@ -125,7 +139,79 @@ const {
         ),
       [rucks]
     )
+    
+  const filteredRucks =
+  useMemo(() => {
 
+    if (teamFilter === 'home') {
+      return rucksDomicile
+    }
+
+    if (teamFilter === 'away') {
+      return rucksVisiteur
+    }
+
+    return rucks
+
+  }, [
+    teamFilter,
+    rucks,
+    rucksDomicile,
+    rucksVisiteur
+  ])
+
+  const contestChartData =
+  useMemo(() => {
+
+    const map = new Map()
+
+    filteredRucks.forEach(ruck => {
+
+      const ordre =
+        Number(ruck.ordre_ruck)
+
+      if (!ordre) {
+        return
+      }
+
+      if (!map.has(ordre)) {
+        map.set(ordre, {
+          ordre,
+          total: 0,
+          contests: 0
+        })
+      }
+
+      const item = map.get(ordre)
+
+      item.total += 1
+
+      if (ruck.contest_ruck === 'oui') {
+        item.contests += 1
+      }
+
+    })
+
+    return Array
+      .from(map.values())
+      .sort(
+        (a, b) =>
+          a.ordre - b.ordre
+      )
+      .map(item => ({
+        ...item,
+
+        pourcentage:
+          item.total > 0
+            ? Math.round(
+                item.contests
+                / item.total
+                * 100
+              )
+            : 0
+      }))
+
+  }, [filteredRucks])
 
   const statsDomicile =
     calculerStats(rucksDomicile)
@@ -306,22 +392,63 @@ const {
 
         <div className="card-title">
 
-          <div>
+  <div>
+    <h2>
+      Suivi des contests
+    </h2>
 
-            <h2>
-              Suivi des contests
-            </h2>
+    <p>
+      Une ligne = une possession
+    </p>
+  </div>
 
-            <p>
-              Une ligne = une possession
-            </p>
+  <div className="team-filter">
 
-          </div>
+    <button
+      className={
+        teamFilter === 'all'
+          ? 'team-filter-button active'
+          : 'team-filter-button'
+      }
+      onClick={() =>
+        setTeamFilter('all')
+      }
+    >
+      Toutes
+    </button>
 
-        </div>
+    <button
+      className={
+        teamFilter === 'home'
+          ? 'team-filter-button active'
+          : 'team-filter-button'
+      }
+      onClick={() =>
+        setTeamFilter('home')
+      }
+    >
+      Domicile
+    </button>
+
+    <button
+      className={
+        teamFilter === 'away'
+          ? 'team-filter-button active'
+          : 'team-filter-button'
+      }
+      onClick={() =>
+        setTeamFilter('away')
+      }
+    >
+      Extérieur
+    </button>
+
+  </div>
+
+</div>
 
         <PossessionContestTable
-          rucks={rucks}
+          rucks={filteredRucks}
           onPossessionClick={
             setSelectedPossession
           }
@@ -329,6 +456,27 @@ const {
 
       </section>
 
+<section className="analysis-card">
+
+  <div className="card-title">
+
+    <div>
+      <h2>
+        Rucks contestés par ordre de ruck
+      </h2>
+
+      <p>
+        Nombre et pourcentage de contests
+      </p>
+    </div>
+
+  </div>
+
+  <ContestChart
+    data={contestChartData}
+  />
+
+</section>
 
       {/* VIDEO */}
 
@@ -545,6 +693,120 @@ function ZoneStats({
 /*
  * TABLE POSSESSIONS
  */
+
+function ContestChart({
+  data
+}) {
+
+  return (
+
+    <div className="contest-chart">
+
+      <ResponsiveContainer
+        width="100%"
+        height={380}
+      >
+
+        <ComposedChart
+          data={data}
+          margin={{
+            top: 25,
+            right: 35,
+            left: 10,
+            bottom: 10
+          }}
+        >
+
+          <CartesianGrid
+            strokeDasharray="3 3"
+            opacity={0.15}
+          />
+
+          <XAxis
+            dataKey="ordre"
+            label={{
+              value: 'Ordre du ruck',
+              position: 'insideBottom',
+              offset: -5
+            }}
+          />
+
+          <YAxis
+            yAxisId="count"
+            allowDecimals={false}
+            label={{
+              value: 'Nombre',
+              angle: -90,
+              position: 'insideLeft'
+            }}
+          />
+
+          <YAxis
+            yAxisId="percent"
+            orientation="right"
+            domain={[0, 100]}
+            tickFormatter={
+              value => `${value}%`
+            }
+          />
+
+          <Tooltip
+            formatter={(
+              value,
+              name
+            ) => {
+
+              if (
+                name ===
+                '% contestés'
+              ) {
+                return [
+                  `${value}%`,
+                  name
+                ]
+              }
+
+              return [
+                value,
+                name
+              ]
+            }}
+            labelFormatter={
+              ordre =>
+                `Ruck n°${ordre}`
+            }
+          />
+
+          <Legend />
+
+          <Bar
+            yAxisId="count"
+            dataKey="contests"
+            name="Rucks contestés"
+            fill="#22c55e"
+            radius={[4, 4, 0, 0]}
+          />
+
+          <Line
+            yAxisId="percent"
+            type="monotone"
+            dataKey="pourcentage"
+            name="% contestés"
+            stroke="#f97316"
+            strokeWidth={3}
+            dot={{
+              r: 4
+            }}
+          />
+
+        </ComposedChart>
+
+      </ResponsiveContainer>
+
+    </div>
+
+  )
+}
 
 function PossessionContestTable({
   rucks,

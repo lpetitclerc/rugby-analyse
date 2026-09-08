@@ -863,3 +863,61 @@ main {
   border: 1px solid #334155;
   border-radius: 7px;
 }
+
+/* ========================================
+   FILTRE EQUIPE
+   ======================================== */
+
+.team-filter {
+  display: flex;
+  gap: 5px;
+
+  padding: 4px;
+
+  background: #0f172a;
+
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+
+.team-filter-button {
+  padding: 7px 13px;
+
+  border: none;
+  border-radius: 6px;
+
+  background: transparent;
+
+  color: #94a3b8;
+
+  font-size: 12px;
+
+  cursor: pointer;
+
+  transition: 0.2s;
+}
+
+.team-filter-button:hover {
+  color: white;
+
+  background: #1e293b;
+}
+
+.team-filter-button.active {
+  color: white;
+
+  background: #2563eb;
+}
+
+
+/* ========================================
+   GRAPHIQUE CONTESTS
+   ======================================== */
+
+.contest-chart {
+  width: 100%;
+
+  min-height: 380px;
+
+  margin-top: 10px;
+}
