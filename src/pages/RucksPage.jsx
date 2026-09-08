@@ -856,8 +856,7 @@ function PossessionContestTable({
             <div className="contest-possession-id">
 
               {
-                possession
-                  .uuid_possession
+                possession.ordre_possession
               }
 
             </div>
@@ -915,8 +914,7 @@ function grouperParPossession(
   rucks
 ) {
 
-  const map =
-    new Map()
+  const map = new Map()
 
   rucks.forEach(
     ruck => {
@@ -931,42 +929,47 @@ function grouperParPossession(
           {
             uuid_possession:
               uuid,
+
+            ordre_possession:
+              ruck.ordre_possession,
+
             rucks: []
           }
         )
-
       }
 
       map.get(uuid)
         .rucks
         .push(ruck)
-
     }
   )
 
-
   return Array
     .from(map.values())
+
+    // Possessions : 1, 2, 3, 4...
+    .sort(
+      (a, b) =>
+        Number(a.ordre_possession)
+        -
+        Number(b.ordre_possession)
+    )
+
+    // Rucks : 1, 2, 3... dans chaque possession
     .map(
       possession => {
 
         possession.rucks.sort(
           (a, b) =>
-            Number(
-              a.ordre_ruck
-            )
+            Number(a.ordre_ruck)
             -
-            Number(
-              b.ordre_ruck
-            )
+            Number(b.ordre_ruck)
         )
 
         return possession
-
       }
     )
 }
-
 
 function calculerStats(
   rucks
