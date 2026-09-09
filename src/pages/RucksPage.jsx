@@ -529,32 +529,146 @@ function Kpi({
  * TERRAIN
  */
 
-function RugbyPitch({
-  rucks
-}) {
+function RugbyPitch({ rucks = [] }) {
+
+  const [viewMode, setViewMode] =
+    useState('contest')
+
+
+  function getDurationClass(duration) {
+
+    if (duration === '-3s') {
+      return 'duration-fast'
+    }
+
+    if (duration === '3-6s') {
+      return 'duration-medium'
+    }
+
+    if (duration === '+6s') {
+      return 'duration-slow'
+    }
+
+    return 'duration-unknown'
+  }
+
 
   return (
 
-    <div className="rugby-pitch">
+    <div className="pitch-container">
 
-      {/* lignes verticales */}
+      {/* SWITCH */}
 
-      <div className="pitch-line line-22-left" />
+      <div className="pitch-view-switch">
 
-      <div className="pitch-line line-half" />
+        <button
+          type="button"
+          className={
+            viewMode === 'contest'
+              ? 'pitch-view-button active'
+              : 'pitch-view-button'
+          }
+          onClick={() =>
+            setViewMode('contest')
+          }
+        >
+          Contest
+        </button>
 
-      <div className="pitch-line line-22-right" />
+        <button
+          type="button"
+          className={
+            viewMode === 'duration'
+              ? 'pitch-view-button active'
+              : 'pitch-view-button'
+          }
+          onClick={() =>
+            setViewMode('duration')
+          }
+        >
+          Durée ruck
+        </button>
+
+      </div>
 
 
-      {/* lignes horizontales */}
+      {/* LEGENDE CONTEST */}
 
-      <div className="pitch-horizontal horizontal-1" />
+      {viewMode === 'contest' && (
 
-      <div className="pitch-horizontal horizontal-2" />
+        <div className="pitch-legend">
+
+          <span>
+            <i className="legend-dot contest-yes" />
+            Contest oui
+          </span>
+
+          <span>
+            <i className="legend-dot contest-no" />
+            Contest non
+          </span>
+
+        </div>
+
+      )}
 
 
-      {rucks.map(
-        ruck => {
+      {/* LEGENDE DUREE */}
+
+      {viewMode === 'duration' && (
+
+        <div className="pitch-legend">
+
+          <span>
+            <i className="legend-dot duration-fast" />
+            -3s
+          </span>
+
+          <span>
+            <i className="legend-dot duration-medium" />
+            3-6s
+          </span>
+
+          <span>
+            <i className="legend-dot duration-slow" />
+            +6s
+          </span>
+
+        </div>
+
+      )}
+
+
+      {/* TERRAIN */}
+
+      <div className="rugby-pitch">
+
+        {/* Lignes principales */}
+
+        <div className="pitch-line line-22-left" />
+        <div className="pitch-line line-half" />
+        <div className="pitch-line line-22-right" />
+
+
+        {/* Lignes verticales pointillées */}
+
+        <div className="pitch-vertical-dashed vertical-5" />
+        <div className="pitch-vertical-dashed vertical-40" />
+        <div className="pitch-vertical-dashed vertical-60" />
+        <div className="pitch-vertical-dashed vertical-95" />
+
+
+        {/* Lignes horizontales pointillées */}
+
+        <div className="pitch-horizontal horizontal-5" />
+        <div className="pitch-horizontal horizontal-15" />
+        <div className="pitch-horizontal horizontal-55" />
+        <div className="pitch-horizontal horizontal-65" />
+
+
+        {/* POINTS */}
+
+        {rucks.map((ruck) => {
 
           const x =
             Math.max(
@@ -569,48 +683,76 @@ function RugbyPitch({
             Math.max(
               0,
               Math.min(
-                100,
+                70,
                 Number(ruck.y_ruck) || 0
               )
             )
 
-          const contest =
+          const yPercent =
+            (y / 70) * 100
+
+
+          const isContest =
             ruck.contest_ruck === 'oui'
+
+
+          const durationClass =
+            getDurationClass(
+              ruck.duree_ruck
+            )
+
+
+          let pointClass = ''
+
+          if (viewMode === 'contest') {
+
+            pointClass =
+              isContest
+                ? 'ruck-point contest'
+                : 'ruck-point no-contest'
+
+          } else {
+
+            pointClass =
+              `ruck-point ${durationClass}`
+
+          }
+
 
           return (
 
             <div
               key={ruck.uuid_ruck}
-              className={
-                contest
-                  ? 'ruck-point contest'
-                  : 'ruck-point no-contest'
-              }
+
+              className={pointClass}
+
               style={{
                 left: `${x}%`,
-                top: `${100 - y}%`
+                top: `${100 - yPercent}%`
               }}
+
               title={
                 `Ruck ${ruck.ordre_ruck}
-Contest : ${
-                  contest
-                    ? 'oui'
-                    : 'non'
-                }
-Durée : ${ruck.duree_ruck ?? '-'}`
+Durée : ${ruck.duree_ruck ?? '-'}
+Contest : ${isContest ? 'oui' : 'non'}
+X : ${x} m
+Y : ${y} m`
               }
             />
 
           )
-        }
-      )}
+
+        })}
+
+      </div>
 
     </div>
 
   )
 }
-
-
+/*
+ * TABLE POSSESSIONS
+ */
 /*
  * STATS PAR ZONE
  */
@@ -638,6 +780,7 @@ function ZoneStats({
     }
   ]
 
+
   return (
 
     <div className="zone-stats">
@@ -652,6 +795,7 @@ function ZoneStats({
               total: 0,
               contests: 0
             }
+
 
           return (
 
@@ -686,14 +830,9 @@ function ZoneStats({
       )}
 
     </div>
+
   )
 }
-
-
-/*
- * TABLE POSSESSIONS
- */
-
 function ContestChart({
   data
 }) {

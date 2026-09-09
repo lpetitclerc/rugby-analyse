@@ -558,21 +558,30 @@ main {
    TERRAIN
    ======================================== */
 
+.pitch-container {
+  width: 100%;
+}
+
 .rugby-pitch {
   position: relative;
 
   width: 100%;
 
-  aspect-ratio: 1.55 / 1;
+  /* Terrain 100m x 70m */
+  aspect-ratio: 100 / 70;
 
   overflow: hidden;
 
   background: #bbf7d0;
 
   border: 2px solid #22c55e;
-
   border-radius: 4px;
 }
+
+
+/* ========================================
+   LIGNES VERTICALES PRINCIPALES
+   ======================================== */
 
 .pitch-line {
   position: absolute;
@@ -582,12 +591,9 @@ main {
 
   width: 2px;
 
-  background: rgba(
-    30,
-    64,
-    175,
-    0.55
-  );
+  background: rgba(30, 64, 175, 0.55);
+
+  z-index: 1;
 }
 
 .line-22-left {
@@ -602,44 +608,97 @@ main {
   left: 78%;
 }
 
+
+/* ========================================
+   LIGNES VERTICALES POINTILLEES
+   x = 5 / 40 / 60 / 95
+   ======================================== */
+
+.pitch-vertical-dashed {
+  position: absolute;
+
+  top: 0;
+  bottom: 0;
+
+  width: 0;
+
+  border-left: 1px dashed rgba(30, 64, 175, 0.55);
+
+  z-index: 1;
+}
+
+.vertical-5 {
+  left: 5%;
+}
+
+.vertical-40 {
+  left: 40%;
+}
+
+.vertical-60 {
+  left: 60%;
+}
+
+.vertical-95 {
+  left: 95%;
+}
+
+
+/* ========================================
+   LIGNES HORIZONTALES POINTILLEES
+   y = 5 / 15 / 55 / 65
+   largeur terrain = 70m
+   ======================================== */
+
 .pitch-horizontal {
   position: absolute;
 
   left: 0;
   right: 0;
 
-  height: 1px;
+  height: 0;
 
-  border-top:
-    1px dashed
-    rgba(30, 64, 175, 0.45);
+  border-top: 1px dashed rgba(30, 64, 175, 0.55);
+
+  z-index: 1;
 }
 
-.horizontal-1 {
-  top: 33%;
+.horizontal-5 {
+  bottom: 7.142857%;
 }
 
-.horizontal-2 {
-  top: 66%;
+.horizontal-15 {
+  bottom: 21.428571%;
+}
+
+.horizontal-55 {
+  bottom: 78.571429%;
+}
+
+.horizontal-65 {
+  bottom: 92.857143%;
 }
 
 
-/* points ruck */
+/* ========================================
+   POINTS RUCK
+   ======================================== */
 
 .ruck-point {
   position: absolute;
 
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
 
   border-radius: 50%;
 
-  transform:
-    translate(-50%, -50%);
+  transform: translate(-50%, -50%);
 
   border: 1px solid white;
 
   cursor: default;
+
+  z-index: 2;
 }
 
 .ruck-point.contest {
@@ -920,4 +979,141 @@ main {
   min-height: 380px;
 
   margin-top: 10px;
+}
+
+/* ========================================
+   SWITCH CONTEST / DUREE
+   ======================================== */
+
+.pitch-view-switch {
+  display: flex;
+  align-items: center;
+
+  gap: 4px;
+
+  width: fit-content;
+
+  padding: 4px;
+  margin-bottom: 8px;
+
+  background: #0f172a;
+
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+
+.pitch-view-button {
+  padding: 7px 13px;
+
+  border: none;
+  border-radius: 6px;
+
+  background: transparent;
+
+  color: #94a3b8;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: 0.2s;
+}
+
+.pitch-view-button:hover {
+  background: #1e293b;
+  color: white;
+}
+
+.pitch-view-button.active {
+  background: #2563eb;
+  color: white;
+}
+
+
+/* ========================================
+   LEGENDE
+   ======================================== */
+
+.pitch-legend {
+  display: flex;
+  align-items: center;
+
+  gap: 16px;
+
+  min-height: 20px;
+  margin-bottom: 10px;
+
+  font-size: 11px;
+
+  color: #94a3b8;
+}
+
+.pitch-legend span {
+  display: flex;
+  align-items: center;
+
+  gap: 5px;
+}
+
+.legend-dot {
+  display: inline-block;
+
+  width: 10px;
+  height: 10px;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+}
+
+
+/* ========================================
+   LEGENDE CONTEST
+   ======================================== */
+
+.legend-dot.contest-yes {
+  background: #16a34a;
+}
+
+.legend-dot.contest-no {
+  background: #dc2626;
+}
+
+
+/* ========================================
+   LEGENDE DUREE
+   ======================================== */
+
+.legend-dot.duration-fast {
+  background: #16a34a;
+}
+
+.legend-dot.duration-medium {
+  background: #f59e0b;
+}
+
+.legend-dot.duration-slow {
+  background: #dc2626;
+}
+
+
+/* ========================================
+   COULEURS DES POINTS PAR DUREE
+   ======================================== */
+
+.ruck-point.duration-fast {
+  background: #16a34a;
+}
+
+.ruck-point.duration-medium {
+  background: #f59e0b;
+}
+
+.ruck-point.duration-slow {
+  background: #dc2626;
+}
+
+.ruck-point.duration-unknown {
+  background: #64748b;
 }
