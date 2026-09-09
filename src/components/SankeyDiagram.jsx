@@ -52,10 +52,6 @@ function buildSankeyData(possessions) {
       possession.type_debut_possession ||
       'Inconnu'
 
-    const resultat =
-      possession.resultat_possession ||
-      'Inconnu'
-
     const gain =
       possession.gain_perte_terrain ||
       'Inconnu'
@@ -64,30 +60,26 @@ function buildSankeyData(possessions) {
       possession.type_fin_possession ||
       'Inconnu'
 
+    // Niveau 0 : début de possession
     const nodeDebut =
       getNode(debut, 0)
 
-    const nodeResultat =
-      getNode(resultat, 1)
-
+    // Niveau 1 : gain / perte de terrain
     const nodeGain =
-      getNode(gain, 2)
+      getNode(gain, 1)
 
+    // Niveau 2 : fin de possession
     const nodeFin =
-      getNode(fin, 3)
+      getNode(fin, 2)
 
+    // Début → Gain / perte
     addLink(
       nodeDebut,
-      nodeResultat,
-      possession
-    )
-
-    addLink(
-      nodeResultat,
       nodeGain,
       possession
     )
 
+    // Gain / perte → Fin
     addLink(
       nodeGain,
       nodeFin,
@@ -214,7 +206,6 @@ function SankeyLink({
         payload.possessions
       )
     }
-
   }
 
   return (
