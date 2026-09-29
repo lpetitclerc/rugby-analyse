@@ -1117,3 +1117,380 @@ main {
 .ruck-point.duration-unknown {
   background: #64748b;
 }
+/* ============================================================
+   JEU AU PIED
+============================================================ */
+
+.jeu-pied-page {
+  width: 100%;
+}
+
+.jeu-pied-section {
+  margin-top: 24px;
+}
+
+.section-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.section-title-row h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #f8fafc;
+}
+
+.section-title-row p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+
+/* ============================================================
+   2 TERRAINS
+============================================================ */
+
+.kick-pitches-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kick-card {
+  min-width: 0;
+  padding: 16px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+}
+
+.kick-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.kick-card-header h3,
+.territory-card-header h3 {
+  margin: 3px 0 0;
+  font-size: 16px;
+  color: #f8fafc;
+}
+
+.kick-team-type {
+  display: block;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.kick-count {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.kick-count strong {
+  color: #f8fafc;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.kick-count span {
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+
+/* ============================================================
+   TERRAIN SVG
+============================================================ */
+
+.kick-pitch-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.kick-pitch {
+  display: block;
+  width: 100%;
+  aspect-ratio: 100 / 70;
+  overflow: visible;
+  border: 2px solid #22c55e;
+  border-radius: 4px;
+}
+
+.kick-pitch-background {
+  fill: #bbf7d0;
+}
+
+.kick-field-line {
+  stroke: rgba(30, 64, 175, 0.55);
+  vector-effect: non-scaling-stroke;
+}
+
+.kick-field-line.main {
+  stroke-width: 1.5;
+}
+
+.kick-field-line.dashed {
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+
+/* ============================================================
+   TRAJECTOIRES
+============================================================ */
+
+.kick-line {
+  stroke: #2563eb;
+  stroke-width: 0.75;
+  stroke-linecap: round;
+  opacity: 0.82;
+  vector-effect: non-scaling-stroke;
+}
+
+.kick-arrow-head {
+  fill: #2563eb;
+}
+
+.kick-start {
+  fill: #0f172a;
+  stroke: #ffffff;
+  stroke-width: 0.3;
+}
+
+.kick-end {
+  fill: #2563eb;
+  stroke: #ffffff;
+  stroke-width: 0.25;
+}
+
+.kick-trajectory {
+  cursor: pointer;
+}
+
+.kick-trajectory:hover .kick-line {
+  stroke-width: 1.5;
+  opacity: 1;
+}
+
+.kick-trajectory:hover .kick-start,
+.kick-trajectory:hover .kick-end {
+  r: 1.5;
+}
+
+.kick-pitch-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  font-size: 13px;
+  pointer-events: none;
+}
+
+
+/* ============================================================
+   GAIN / PERTE TERRAIN
+============================================================ */
+
+.territory-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.territory-card {
+  min-width: 0;
+  overflow: hidden;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+}
+
+.territory-card-header {
+  padding: 16px;
+  border-bottom: 1px solid #334155;
+}
+
+.territory-table-header {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) 150px minmax(110px, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #0f172a;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.territory-table-header span:nth-child(2) {
+  text-align: center;
+}
+
+.territory-table-header span:last-child {
+  text-align: right;
+}
+
+.territory-list {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.territory-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) 150px minmax(110px, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #334155;
+}
+
+.territory-row:last-child {
+  border-bottom: none;
+}
+
+
+/* ============================================================
+   EVENEMENTS
+============================================================ */
+
+.territory-event {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.territory-event.right {
+  text-align: right;
+}
+
+.territory-event strong {
+  overflow: hidden;
+  color: #e2e8f0;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.territory-event small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.territory-possession-number {
+  color: #60a5fa;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+
+/* ============================================================
+   BARRE GAIN / PERTE
+============================================================ */
+
+.territory-gain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.territory-gain-value {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.territory-gain-line {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  background: #334155;
+  border-radius: 999px;
+}
+
+.territory-gain-line span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 50%;
+  border-radius: 999px;
+}
+
+.territory-gain.positive {
+  color: #22c55e;
+}
+
+.territory-gain.positive .territory-gain-line span {
+  background: #22c55e;
+}
+
+.territory-gain.negative {
+  color: #ef4444;
+}
+
+.territory-gain.negative .territory-gain-line span {
+  left: 0;
+  background: #ef4444;
+}
+
+.territory-gain.neutral {
+  color: #94a3b8;
+}
+
+.territory-gain.neutral .territory-gain-line span {
+  display: none;
+}
+
+.territory-empty {
+  padding: 30px 15px;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
+
+/* ============================================================
+   RESPONSIVE
+============================================================ */
+
+@media (max-width: 950px) {
+  .kick-pitches-grid,
+  .territory-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .territory-table-header,
+  .territory-row {
+    grid-template-columns: minmax(80px, 1fr) 90px minmax(80px, 1fr);
+    gap: 6px;
+  }
+
+  .territory-row {
+    padding: 9px 8px;
+  }
+
+  .territory-event strong {
+    font-size: 10px;
+  }
+}

@@ -17,6 +17,8 @@ import PossessionsPage
 import RucksPage
   from './pages/RucksPage'
 
+import JeuPiedPage from './pages/JeuPiedPage'
+
 import './App.css'
 
 
@@ -68,6 +70,17 @@ function App() {
               Rucks & Contests
             </NavLink>
 
+            <NavLink
+              to="/jeu-pied"
+              className={({ isActive }) =>
+                isActive
+                  ? 'nav-link active'
+                  : 'nav-link'
+              }
+            >
+              Jeu au Pied
+            </NavLink>
+
           </div>
 
         </nav>
@@ -112,6 +125,17 @@ function App() {
             path="/rucks"
             element={
               <RucksPage
+                saison={saison}
+                journee={journee}
+                matchId={matchId}
+              />
+            }
+          />
+
+          <Route
+            path="/jeu-pied"
+            element={
+              <JeuPiedPage
                 saison={saison}
                 journee={journee}
                 matchId={matchId}
