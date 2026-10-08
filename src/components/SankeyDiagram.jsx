@@ -24,11 +24,7 @@ function buildSankeyData(possessions) {
     return nodeMap.get(key)
   }
 
-  function addLink(
-    source,
-    target,
-    possession
-  ) {
+  function addLink(source, target, possession) {
     const key = `${source}-${target}`
 
     if (!links.has(key)) {
@@ -52,36 +48,19 @@ function buildSankeyData(possessions) {
       possession.type_debut_possession ||
       'Inconnu'
 
-    const gain =
-      possession.gain_perte_terrain ||
-      'Inconnu'
-
     const fin =
       possession.type_fin_possession ||
       'Inconnu'
 
     // Niveau 0 : début de possession
-    const nodeDebut =
-      getNode(debut, 0)
+    const nodeDebut = getNode(debut, 0)
 
-    // Niveau 1 : gain / perte de terrain
-    const nodeGain =
-      getNode(gain, 1)
+    // Niveau 1 : fin de possession
+    const nodeFin = getNode(fin, 1)
 
-    // Niveau 2 : fin de possession
-    const nodeFin =
-      getNode(fin, 2)
-
-    // Début → Gain / perte
+    // Début → Fin
     addLink(
       nodeDebut,
-      nodeGain,
-      possession
-    )
-
-    // Gain / perte → Fin
-    addLink(
-      nodeGain,
       nodeFin,
       possession
     )
@@ -98,8 +77,7 @@ export default function SankeyDiagram({
   onLinkClick
 }) {
 
-  const data =
-    buildSankeyData(possessions)
+  const data = buildSankeyData(possessions)
 
   return (
     <div
@@ -125,9 +103,7 @@ export default function SankeyDiagram({
           }}
           iterations={32}
           linkCurvature={0.5}
-          node={
-            <SankeyNode />
-          }
+          node={<SankeyNode />}
           link={
             <SankeyLink
               onLinkClick={onLinkClick}
@@ -198,13 +174,8 @@ function SankeyLink({
   `
 
   function handleClick() {
-
-    if (
-      payload?.possessions?.length
-    ) {
-      onLinkClick(
-        payload.possessions
-      )
+    if (payload?.possessions?.length) {
+      onLinkClick(payload.possessions)
     }
   }
 
@@ -212,9 +183,7 @@ function SankeyLink({
     <path
       d={path}
       stroke="#64748b"
-      strokeWidth={
-        Math.max(linkWidth, 2)
-      }
+      strokeWidth={Math.max(linkWidth, 2)}
       fill="none"
       opacity={0.55}
       onClick={handleClick}
