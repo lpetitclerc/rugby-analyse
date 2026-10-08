@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { supabase } from '../lib/supabase'
 
-import SankeyDiagram
-  from '../components/SankeyDiagram'
+import SankeyDiagram from '../components/SankeyDiagram'
 
-import VideoPlayer
-  from '../components/VideoPlayer'
+import VideoPlayer from '../components/VideoPlayer'
 
 import '../App.css'
 
@@ -16,63 +14,80 @@ function PossessionsPage({
   matchId
 }) {
 
-  const [
-    possessions,
-    setPossessions
-  ] = useState([])
-  const [
-    selectedPossession,
-    setSelectedPossession
-  ] = useState(null)
+  const [possessions, setPossessions] = useState([])
 
-  const [
-    selectedPossessions,
-    setSelectedPossessions
-  ] = useState([])
+  const [selectedPossession, setSelectedPossession] = useState(null)
 
-  const [
-    loading,
-    setLoading
-  ] = useState(true)
+  const [selectedPossessions, setSelectedPossessions] = useState([])
 
-  const [
-    error,
-    setError
-  ] = useState(null)
+  const [teamFilter, setTeamFilter] = useState('all')
 
-  useEffect(() => {
-    chargerPossessions()
-  }, [])
+  const [loading, setLoading] = useState(false)
 
-  async function chargerPossessions() {
+  const [error, setError] = useState(null)
+
+  const chargerPossessions = useCallback(async () => {
+
+    // Aucun match sélectionné
+    if (!matchId) {
+      setPossessions([])
+      setSelectedPossession(null)
+      setSelectedPossessions([])
+      setLoading(false)
+      setError(null)
+      return
+    }
 
     setLoading(true)
     setError(null)
 
+    // Fermer les anciennes sélections
+    setSelectedPossession(null)
+    setSelectedPossessions([])
+
     const {
       data,
-      error
+      error: queryError
     } = await supabase
-      .from(
-        'v_recuperation_possession'
-      )
+      .from('v_recuperation_possession')
       .select('*')
-      .order(
-        'ordre_possession',
-        {
-          ascending: true
-        }
-      )
+      .eq('uuid_match', matchId)
+      .order('ordre_possession', {
+        ascending: true
+      })
 
-    if (error) {
-      console.error(error)
-      setError(error.message)
+    if (queryError) {
+      console.error('Erreur chargement possessions :', queryError)
+      setError(queryError.message)
+      setPossessions([])
     } else {
       setPossessions(data || [])
     }
 
     setLoading(false)
+
+  }, [matchId])
+
+  // Recharger automatiquement au changement de match
+  useEffect(() => {
+    chargerPossessions()
+  }, [chargerPossessions])
+
+  const filteredPossessions = useMemo(() => {
+  if (teamFilter === 'home') {
+    return possessions.filter(
+      (p) => Number(p.equipe_domicile) === 1
+    )
   }
+
+  if (teamFilter === 'away') {
+    return possessions.filter(
+      (p) => Number(p.equipe_domicile) === 0
+    )
+  }
+
+  return possessions
+}, [possessions, teamFilter])
 
   return (
     <div className="app">
@@ -90,9 +105,8 @@ function PossessionsPage({
         </div>
 
         <button
-          onClick={
-            chargerPossessions
-          }
+          onClick={chargerPossessions}
+          disabled={!matchId || loading}
         >
           ↻ Actualiser
         </button>
@@ -101,67 +115,95 @@ function PossessionsPage({
 
       <main>
 
+        {!matchId && (
+          <div className="loading">
+            Sélectionne un match pour afficher les possessions.
+          </div>
+        )}
+
         {error && (
           <div className="error">
             {error}
           </div>
         )}
 
-        <div className="stats">
+        {matchId && (
+          <>
+          <div className="possession-team-filter">
+          <button
+            type="button"
+            className={teamFilter === 'all' ? 'active' : ''}
+            onClick={() => setTeamFilter('all')}
+          >
+            Toutes les équipes
+          </button>
 
-          <strong>
-            {possessions.length}
-          </strong>
+          <button
+            type="button"
+            className={teamFilter === 'home' ? 'active' : ''}
+            onClick={() => setTeamFilter('home')}
+          >
+            Domicile
+          </button>
 
-          <span>
-            possessions
-          </span>
+          <button
+            type="button"
+            className={teamFilter === 'away' ? 'active' : ''}
+            onClick={() => setTeamFilter('away')}
+          >
+            Extérieur
+          </button>
 
         </div>
+            <div className="stats">
 
-        {loading ? (
+              <strong>
+                {filteredPossessions.length}
+              </strong>
 
-          <div className="loading">
-            Chargement des possessions...
-          </div>
+              <span>
+                possessions
+              </span>
 
-        ) : (
+            </div>
 
-          <SankeyDiagram
-            possessions={possessions}
-            onLinkClick={
-              setSelectedPossessions
-            }
-          />
+            {loading ? (
 
+              <div className="loading">
+                Chargement des possessions...
+              </div>
+
+            ) : (
+
+              <SankeyDiagram
+                possessions={filteredPossessions}
+                onLinkClick={setSelectedPossessions}
+              />
+
+            )}
+
+            {selectedPossessions.length > 0 && (
+
+              <PossessionList
+                possessions={selectedPossessions}
+                onClose={() => setSelectedPossessions([])}
+                onSelectPossession={setSelectedPossession}
+              />
+
+            )}
+
+            {selectedPossession && (
+
+              <VideoPlayer
+                possession={selectedPossession}
+                saison={saison}
+                journee={journee}
+                onClose={() => setSelectedPossession(null)}
+              />
+
+            )}
+          </>
         )}
-
-        {selectedPossessions.length > 0 && (
-
-          <PossessionList
-            possessions={
-              selectedPossessions
-            }
-            onClose={() =>
-              setSelectedPossessions([])
-            }
-            onSelectPossession={
-              setSelectedPossession
-            }
-          />
-          
-        )}
-
-        {selectedPossession && (
-            <VideoPlayer
-              possession={selectedPossession}
-              saison={saison}
-              journee={journee}
-              onClose={() =>
-                setSelectedPossession(null)
-              }
-            />
-          )}
 
       </main>
 
@@ -187,15 +229,11 @@ function PossessionList({
           </strong>
 
           <span>
-            {possessions.length}
-            {' '}
-            possessions
+            {possessions.length} possessions
           </span>
         </div>
 
-        <button
-          onClick={onClose}
-        >
+        <button onClick={onClose}>
           ✕
         </button>
 
@@ -203,36 +241,25 @@ function PossessionList({
 
       <div className="possession-list">
 
-        {possessions.map(
-          (possession) => (
+        {possessions.map((possession) => (
 
-            <button
-              key={
-                possession.uuid_possession
-              }
-              className="possession-item"
-              onClick={() =>
-                onSelectPossession(
-                  possession
-                )
-              }
-            >
+          <button
+            key={possession.uuid_possession}
+            className="possession-item"
+            onClick={() => onSelectPossession(possession)}
+          >
 
-              <strong>
-                {possession.uuid_possession}
-              </strong>
+            <strong>
+              {possession.uuid_possession}
+            </strong>
 
-              <span>
-                Possession #
-                {
-                  possession.ordre_possession
-                }
-              </span>
+            <span>
+              Possession #{possession.ordre_possession}
+            </span>
 
-            </button>
+          </button>
 
-          )
-        )}
+        ))}
 
       </div>
 
