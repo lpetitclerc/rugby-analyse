@@ -1,154 +1,93 @@
 import { useState } from 'react'
+import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom'
 
-import {
-  BrowserRouter,
-  NavLink,
-  Navigate,
-  Route,
-  Routes
-} from 'react-router-dom'
-
-import MatchSelector
-  from './components/MatchSelector'
-
-import PossessionsPage
-  from './pages/PossessionsPage'
-
-import RucksPage
-  from './pages/RucksPage'
-
+import MatchSelector from './components/MatchSelector'
+import PossessionsPage from './pages/PossessionsPage'
+import RucksPage from './pages/RucksPage'
 import JeuPiedPage from './pages/JeuPiedPage'
-
+import GpsPage from './pages/GpsPage'
 import './App.css'
 
+// Pour un déploiement à la racine du domaine.
+// Sous Vite avec un sous-chemin : `${import.meta.env.BASE_URL}gps/`.
+const GPS_ASSETS_BASE = '/gps/'
 
 function App() {
-
-  const [saison, setSaison] =
-    useState('')
-
-  const [journee, setJournee] =
-    useState('')
-
-  const [matchId, setMatchId] =
-    useState('')
-
+  const [saison, setSaison] = useState('')
+  const [journee, setJournee] = useState('')
+  const [matchId, setMatchId] = useState('')
 
   return (
-
     <BrowserRouter>
-
       <div className="application-layout">
-
         <nav className="main-nav">
-
-          <div className="nav-brand">
-            Rugby Analytics
-          </div>
-
+          <div className="nav-brand">Rugby Analytics</div>
           <div className="nav-links">
-
             <NavLink
               to="/possessions"
-              className={({ isActive }) =>
-                isActive
-                  ? 'nav-link active'
-                  : 'nav-link'
-              }
+              className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
             >
               Possessions
             </NavLink>
-
             <NavLink
               to="/rucks"
-              className={({ isActive }) =>
-                isActive
-                  ? 'nav-link active'
-                  : 'nav-link'
-              }
+              className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
             >
-              Rucks & Contests
+              Rucks &amp; Contests
             </NavLink>
-
             <NavLink
               to="/jeu-pied"
-              className={({ isActive }) =>
-                isActive
-                  ? 'nav-link active'
-                  : 'nav-link'
-              }
+              className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
             >
               Jeu au Pied
             </NavLink>
-
+            <NavLink
+              to="/gps"
+              className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
+            >
+              GPS &amp; Vidéo
+            </NavLink>
           </div>
-
         </nav>
-
 
         <MatchSelector
           saison={saison}
           setSaison={setSaison}
-
           journee={journee}
           setJournee={setJournee}
-
           matchId={matchId}
           setMatchId={setMatchId}
         />
 
-
         <Routes>
-
-          <Route
-            path="/"
-            element={
-              <Navigate
-                to="/possessions"
-                replace
-              />
-            }
-          />
-
+          <Route path="/" element={<Navigate to="/possessions" replace />} />
           <Route
             path="/possessions"
-            element={
-              <PossessionsPage
-                saison={saison}
-                journee={journee}
-                matchId={matchId}
-              />
-            }
+            element={<PossessionsPage saison={saison} journee={journee} matchId={matchId} />}
           />
-
           <Route
             path="/rucks"
-            element={
-              <RucksPage
-                saison={saison}
-                journee={journee}
-                matchId={matchId}
-              />
-            }
+            element={<RucksPage saison={saison} journee={journee} matchId={matchId} />}
           />
-
           <Route
             path="/jeu-pied"
+            element={<JeuPiedPage saison={saison} journee={journee} matchId={matchId} />}
+          />
+          <Route
+            path="/gps"
             element={
-              <JeuPiedPage
+              <GpsPage
+                key={JSON.stringify([saison, journee, matchId])}
                 saison={saison}
                 journee={journee}
                 matchId={matchId}
+                assetsBase={GPS_ASSETS_BASE}
               />
             }
           />
-
         </Routes>
-
       </div>
-
     </BrowserRouter>
-
   )
 }
 
