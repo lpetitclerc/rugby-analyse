@@ -1526,3 +1526,182 @@ main {
   border-color: #2563eb;
   color: white;
 }
+
+/* ============================================================
+   IDENTITE AC BOBIGNY 93 — ROUGE / NOIR / BLANC
+   Inspiration : visuels de saison fournis par l'utilisateur.
+   Les classes et les couleurs des indicateurs sportifs sont conservees.
+   ============================================================ */
+:root {
+  --club-red: #d60b16;
+  --club-red-hover: #f0222e;
+  --club-black: #090909;
+  --club-panel: #171717;
+  --club-panel-raised: #222222;
+  --club-border: #353535;
+  --club-text: #f8f8f8;
+  --club-muted: #b3b3b3;
+  --club-display: Impact, 'Arial Narrow', 'Roboto Condensed', sans-serif;
+}
+html { color-scheme: dark; }
+body {
+  background: var(--club-black);
+  color: var(--club-text);
+  font-family: Inter, 'Segoe UI', Arial, sans-serif;
+}
+button, select { font: inherit; }
+button:focus-visible, select:focus-visible, a:focus-visible {
+  outline: 2px solid #ff5962;
+  outline-offset: 3px;
+}
+.application-layout { min-height: 100vh; }
+.main-nav {
+  height: auto;
+  min-height: 76px;
+  padding: 14px clamp(16px, 3vw, 46px);
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #080808;
+  border-bottom: 3px solid var(--club-red);
+  box-shadow: 0 8px 24px rgba(0,0,0,.24);
+}
+.nav-brand {
+  color: #fff;
+  font-family: var(--club-display);
+  font-size: clamp(22px, 2.5vw, 31px);
+  font-weight: 900;
+  letter-spacing: .025em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.nav-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.nav-link {
+  color: #c7c7c7;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  transition: background .18s, color .18s, border-color .18s;
+}
+.nav-link:hover { color: #fff; background: #252525; border-color: #404040; }
+.nav-link.active { color: #fff; background: var(--club-red); border-color: var(--club-red); }
+.global-filters {
+  padding: 17px clamp(16px, 3vw, 46px);
+  background: #121212;
+  border-bottom: 1px solid var(--club-border);
+  flex-wrap: wrap;
+}
+.filter-group label {
+  color: #c2c2c2;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.filter-group select {
+  background: #252525;
+  color: #fff;
+  border: 1px solid #4b4b4b;
+  border-radius: 4px;
+}
+.header, .page-header { border-color: var(--club-border); }
+.header { padding: 30px clamp(16px, 3vw, 46px); }
+main, .page { padding: 28px clamp(16px, 3vw, 46px); }
+.header h1, .page-header h1 {
+  font-family: var(--club-display);
+  text-transform: uppercase;
+  letter-spacing: .018em;
+  line-height: 1.08;
+  font-size: clamp(29px, 3.2vw, 43px);
+  color: #fff;
+}
+.header p, .page-header p, .section-title-row p { color: var(--club-muted); }
+.card-title h2, .section-title-row h2,
+.kick-card-header h3, .territory-card-header h3 {
+  font-family: var(--club-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .035em;
+  color: #fff;
+}
+.card-title h2, .section-title-row h2 { font-size: clamp(20px, 2vw, 27px); }
+.analysis-card, .kick-card, .territory-card, .ruck-kpi {
+  background: var(--club-panel);
+  border: 1px solid var(--club-border);
+  border-radius: 5px;
+  box-shadow: 0 12px 28px rgba(0,0,0,.20);
+}
+.analysis-card, .kick-card, .territory-card { border-top: 3px solid var(--club-red); }
+.ruck-kpi { border-left: 3px solid var(--club-red); }
+.ruck-kpi strong, .kick-count strong, .stats strong {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.ruck-kpi span, .stats span, .card-title p, .card-title span,
+.kick-team-type, .kick-count span { color: var(--club-muted); }
+.header button, .refresh-button {
+  background: var(--club-red);
+  color: #fff;
+  border: 1px solid var(--club-red);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.header button:hover, .refresh-button:hover { background: var(--club-red-hover); border-color: var(--club-red-hover); }
+.header button:disabled, .refresh-button:disabled { opacity: .5; cursor: not-allowed; }
+.team-filter, .pitch-view-switch { background: #101010; border-color: #424242; border-radius: 5px; }
+.team-filter-button, .pitch-view-button { color: #c0c0c0; border-radius: 3px; }
+.team-filter-button:hover, .pitch-view-button:hover { color: #fff; background: #303030; }
+.team-filter-button.active, .pitch-view-button.active,
+.possession-team-filter button.active { background: var(--club-red); border-color: var(--club-red); color: #fff; }
+.possession-team-filter button {
+  background: #222;
+  color: #d1d1d1;
+  border-color: #444;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.possession-team-filter button:hover { color: #fff; background: #333; }
+.possession-panel, .video-panel {
+  background: #121212;
+  border: 1px solid #484848;
+  border-top: 3px solid var(--club-red);
+  border-radius: 6px;
+  max-width: calc(100vw - 24px);
+}
+.panel-header, .video-header, .video-info, .territory-card-header { border-color: #3c3c3c; }
+.possession-item { background: #222; color: #fff; border-radius: 3px; }
+.possession-item:hover { background: #2c2c2c; border-color: var(--club-red); }
+.possession-item span, .panel-header span, .video-subtitle { color: var(--club-muted); }
+.zone-stat { background: #242424; border-radius: 3px; }
+.zone-label, .zone-stat span:last-child { color: var(--club-muted); }
+.contest-row:nth-child(even) { background: #232323; }
+.video-link { background: #252525; border-color: #505050; }
+.video-link:hover { background: var(--club-red); }
+.territory-table-header { background: #101010; color: #c6c6c6; }
+.territory-row { border-color: #383838; }
+.territory-row:hover { background: #252525; }
+.territory-event strong { color: #fff; }
+.territory-event small { color: var(--club-muted); }
+.territory-possession-number { color: #ff7279; }
+.territory-gain-line { background: #444; }
+/* Les terrains restent verts, et les couleurs metier vert/orange/rouge
+   restent intactes pour preserver la lecture des statistiques. */
+@media (max-width: 700px) {
+  .main-nav { align-items: flex-start; }
+  .nav-links { width: 100%; }
+  .nav-link { padding: 9px 10px; font-size: 11px; }
+  .global-filters { gap: 12px; }
+  .filter-group { flex: 1 1 145px; min-width: 0; }
+  .filter-group select { min-width: 0; width: 100%; }
+  .video-panel, .possession-panel { right: 12px; bottom: 12px; }
+  .video-info { grid-template-columns: repeat(2, 1fr); }
+  .header { flex-wrap: wrap; gap: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-link, .team-filter-button, .pitch-view-button,
+  .possession-team-filter button { transition: none; }
+}
