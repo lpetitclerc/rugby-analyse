@@ -77,17 +77,26 @@ export default function SankeyDiagram({
   possessions,
   onLinkClick
 }) {
-  const [selectedStart, setSelectedStart] = useState(null)
+  const [selectedNode, setSelectedNode] = useState(null)
 
   const data = buildSankeyData(possessions)
 
   function handleNodeClick(payload) {
-    // On sélectionne uniquement les nœuds de départ
-    if (payload?.level !== 0) return
+    const selection = {
+      name: payload.name,
+      level: payload.level
+    }
 
-    setSelectedStart((current) =>
-      current === payload.name ? null : payload.name
-    )
+    setSelectedNode((current) => {
+      if (
+        current?.name === selection.name &&
+        current?.level === selection.level
+      ) {
+        return null
+      }
+
+      return selection
+    })
   }
 
   return (
@@ -112,13 +121,13 @@ export default function SankeyDiagram({
           linkCurvature={0.5}
           node={
             <SankeyNode
-              selectedStart={selectedStart}
+              selectedNode={selectedNode}
               onNodeClick={handleNodeClick}
             />
           }
           link={
             <SankeyLink
-              selectedStart={selectedStart}
+              selectedNode={selectedNode}
               onLinkClick={onLinkClick}
             />
           }
@@ -136,20 +145,18 @@ function SankeyNode({
   width,
   height,
   payload,
-  selectedStart,
+  selectedNode,
   onNodeClick
 }) {
-  const isStart = payload?.level === 0
   const isSelected =
-    isStart && selectedStart === payload?.name
+    selectedNode?.name === payload?.name &&
+    selectedNode?.level === payload?.level
 
   return (
     <g
-      onClick={() => {
-        if (isStart) onNodeClick(payload)
-      }}
+      onClick={() => onNodeClick(payload)}
       style={{
-        cursor: isStart ? 'pointer' : 'default'
+        cursor: 'pointer'
       }}
     >
       <rect
@@ -184,7 +191,7 @@ function SankeyLink({
   targetControlX,
   linkWidth,
   payload,
-  selectedStart,
+  selectedNode,
   onLinkClick
 }) {
   const path = `
@@ -194,19 +201,28 @@ function SankeyLink({
      ${targetX},${targetY}
   `
 
-  // Le premier élément du flux est la possession de départ.
-  // Les liens regroupent des possessions ayant le même départ.
-  const startName =
-    payload?.possessions?.[0]?.type_debut_possession ||
-    'Inconnu'
+  const firstPossession = payload?.possessions?.[0]
 
-  const isHighlighted =
-    selectedStart !== null &&
-    startName === selectedStart
+  const startName =
+    firstPossession?.type_debut_possession || 'Inconnu'
+
+  const endName =
+    firstPossession?.type_fin_possession || 'Inconnu'
+
+  let isHighlighted = false
+
+  if (selectedNode?.level === 0) {
+    // Nœud de départ : flux sortants
+    isHighlighted = startName === selectedNode.name
+  }
+
+  if (selectedNode?.level === 1) {
+    // Nœud d'arrivée : flux entrants
+    isHighlighted = endName === selectedNode.name
+  }
 
   const isDimmed =
-    selectedStart !== null &&
-    !isHighlighted
+    selectedNode !== null && !isHighlighted
 
   function handleClick() {
     if (payload?.possessions?.length) {
@@ -222,7 +238,7 @@ function SankeyLink({
       fill="none"
       opacity={
         isHighlighted
-          ? 0.9
+          ? 0.95
           : isDimmed
             ? 0.12
             : 0.55
