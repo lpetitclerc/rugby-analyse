@@ -13,13 +13,13 @@
     linked=false;playing=false;updatePlay();restoreRange();$('sync').textContent='Synchroniser ces instants';$('sync').disabled=!(state?.ready&&roster.size);$('match-time').textContent='GPS : heure du fichier';send({type:'linked',active:false});status(message);
   }
   function align(){
-    if(linked){command('pause');unlink();return;}
+    if(linked){command('pause');unlink();window.gpsNotifySettings?.({synchronisation:{anchor,linked:false}});return;}
     if(!state?.ready||!roster.size){status('Chargez les GPS et une vidéo lisible avant de synchroniser.');return;}
     // Mise en pause sur les instants affichés : aucun décalage pendant le clic.
     const videoTime=seconds();anchor=SyncMath.anchor(current,videoTime);const r=range();
     if(r.max<=r.min){status('Les données GPS et la vidéo ne couvrent pas une plage commune.');return;}
     playing=false;state={...state,time:videoTime,paused:true};receivedAt=performance.now();command('pause');command('seek',{time:videoTime});
-    linked=true;updatePlay();$('seek').min=Math.ceil(SyncMath.gps(anchor,r.min)-start);$('seek').max=Math.floor(SyncMath.gps(anchor,r.max)-start);
+    linked=true;window.gpsNotifySettings?.({synchronisation:{anchor,linked:true}});updatePlay();$('seek').min=Math.ceil(SyncMath.gps(anchor,r.min)-start);$('seek').max=Math.floor(SyncMath.gps(anchor,r.max)-start);
     $('sync').textContent='Désynchroniser';send({type:'linked',active:true});
     status(`Synchronisé : vidéo 00:00:00 = GPS ${fmt(anchor)}. Les contrôles des deux fenêtres sont liés.`);
   }
@@ -30,7 +30,7 @@
     if(!popup){status('Autorisez les fenêtres supplémentaires pour ouvrir le lecteur vidéo.');return false;}
     status('Ouverture du lecteur vidéo…');return true;
   }
-  function setSource(url,label){command('pause');unlink('Nouvelle vidéo. Attendez son chargement, puis alignez les curseurs.');state=null;$('sync').disabled=true;sourceId++;source={url,label};send({type:'source',...source});}
+  function setSource(url,label){if(!url.startsWith('blob:'))window.parent.postMessage({type:'GPS_VIDEO_CHANGED',matchId:window.gpsActiveMatchId,video:{url,type:'url'}},origin);command('pause');unlink('Nouvelle vidéo. Attendez son chargement, puis alignez les curseurs.');state=null;$('sync').disabled=true;sourceId++;source={url,label};send({type:'source',...source});}
   $('open-video').onclick=openVideo;
   $('local-video').onchange=e=>{const file=e.target.files[0];if(!file)return;if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=URL.createObjectURL(file);setSource(blobUrl,file.name);openVideo();e.target.value='';};
   $('load-url').onclick=()=>{try{const url=new URL($('video-url').value.trim());if(!['http:','https:'].includes(url.protocol))throw Error();if(blobUrl){URL.revokeObjectURL(blobUrl);blobUrl=null;}setSource(url.href,url.href);openVideo();}catch{status('Saisissez une URL directe http(s) vers un fichier vidéo MP4 ou WebM.');}};
@@ -42,6 +42,9 @@
     if(data.type==='error'){command('pause');unlink(data.message);return;}
     if(data.type==='state'&&Number.isFinite(data.time)&&Number.isFinite(data.duration)&&Number.isFinite(data.rate)){
       state=data;receivedAt=performance.now();$('sync').disabled=!(data.ready&&roster.size);
+      if(restoredSync?.linked && data.ready && roster.size && !linked){
+        const r=range();if(r.max>r.min){linked=true;playing=false;updatePlay();$('sync').textContent='Désynchroniser';$('seek').min=Math.ceil(SyncMath.gps(anchor,r.min)-start);$('seek').max=Math.floor(SyncMath.gps(anchor,r.max)-start);send({type:'linked',active:true});status('Synchronisation du match restaurée.');}
+      }
       if(linked){playing=!data.paused;updatePlay();const opt=[...$('rate').options].find(o=>Number(o.value)===data.rate);if(opt)$('rate').value=opt.value;}
     }
   });
@@ -50,7 +53,19 @@
   $('reset').onclick=()=>{if(!linked){gpsReset();return;}command('pause');command('seek',{time:range().min});};
   $('seek').oninput=e=>{if(!linked){gpsSeek(e);return;}const r=range(),t=Math.max(r.min,Math.min(r.max,SyncMath.video(anchor,start+Number(e.target.value))));current=SyncMath.gps(anchor,t);state={...state,time:t,waiting:true};receivedAt=performance.now();command('seek',{time:t});};
   $('rate').onchange=e=>{if(linked)command('rate',{rate:Number(e.target.value)});};
+  let restoredSync=null;
   window.videoSync={
+    restore(sync,video){
+      if(sync) restoredSync=sync;
+      const url=video?.url||'';
+      $('video-url').value=url;
+      if(url && (!source || source.url!==url)) {
+        source={url,label:url};sourceId++;
+        if(ready) send({type:'source',...source});
+      }
+      if(restoredSync && Number.isFinite(restoredSync.anchor)) anchor=restoredSync.anchor;
+      // L'alignement effectif nécessite une vidéo prête et des GPS chargés.
+    },
     get linked(){return linked;},
     dispose(){command('pause');if(popup&&!popup.closed)popup.close();},
     reset(){if(linked)command('pause');unlink();},

@@ -1,0 +1,3 @@
+.gps-viewer { padding: 8px 12px; min-width: 0; }
+.gps-viewer-frame { display: block; width: 100%; height: calc(100vh - 180px); min-height: 650px; border: 0; background: #111; border-radius: 8px; }
+.gps-viewer-error { color: #b91c1c; }

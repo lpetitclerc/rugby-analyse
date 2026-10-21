@@ -28,7 +28,7 @@ function merge(old, fresh) {
   const outT=new Uint32Array(size),outV=new Float32Array(size*4),outR=new Float64Array(size*2);let j=0;
   for(let i=0;i<n;i++){const k=order[i];if(i<n-1&&times[k]===times[order[i+1]])continue;outT[j]=times[k];outV.set(values.subarray(k*4,k*4+4),j*4);outR.set(raw.subarray(k*2,k*2+2),j++*2);}return {times:outT,values:outV,raw:outR};
 }
-async function readFile(file) {
+async function readFile(file, equipe) {
   const batch=new Map();let headers=null,cols,valid=0,invalid=0;
   function line(raw){if(!raw.trim())return;const f=parseLine(raw.replace(/\r$/,''));
     if(!headers){headers=f.map(s=>s.replace(/^\uFEFF/,'').trim().toLowerCase());cols=["nom d'affichage du joueur",'temps','lat','lon','speed (m/s)','rythme cardiaque'].map(h=>headers.indexOf(h));if(cols.slice(0,4).some(i=>i<0))throw Error('Colonnes nom, Temps, Lat et Lon requises.');return;}
@@ -41,7 +41,7 @@ async function readFile(file) {
   try{while(true){const {done,value}=await reader.read();pending+=done?decoder.decode():decoder.decode(value,{stream:true});let begin=0,pos;while((pos=pending.indexOf('\n',begin))!==-1){line(pending.slice(begin,pos));begin=pos+1;}pending=pending.slice(begin);if(done)break;}if(pending)line(pending);}
   finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
   if(!valid)throw Error('Aucune mesure valide.');
-  for(const[name,builder]of batch)tracks.set(name,merge(tracks.get(name),builder.finish()));return {valid,invalid};
+  for(const[name,builder]of batch)tracks.set(`${equipe}:${name}`,{...merge(tracks.get(`${equipe}:${name}`),builder.finish()),name,equipe});return {valid,invalid};
 }
 self.onmessage=async ({data})=>{
   if(data.type==='clear'){tracks.clear();return;}
@@ -52,10 +52,10 @@ self.onmessage=async ({data})=>{
     sendTracks({type:'geometry-done',config:getGeometryConfig(),total,invalid});return;
   }
   let valid=0,invalid=0;const errors=[];
-  for(let i=0;i<data.files.length;i++){const file=data.files[i];self.postMessage({type:'progress',index:i+1,total:data.files.length,name:file.name});try{const r=await readFile(file);valid+=r.valid;invalid+=r.invalid;}catch(e){errors.push(file.name+' : '+e.message);}}
+  for(let i=0;i<data.files.length;i++){const entry=data.files[i];const file=entry.file||entry;const equipe=entry.equipe==='exterieur'?'exterieur':'domicile';self.postMessage({type:'progress',index:i+1,total:data.files.length,name:file.name});try{const r=await readFile(file,equipe);valid+=r.valid;invalid+=r.invalid;}catch(e){errors.push(file.name+' : '+e.message);}}
   sendTracks({type:'done',valid,invalid,errors});
 };
 function sendTracks(extra){
-  const players=[],transfer=[];for(const[name,p]of tracks){const times=p.times.slice(),values=p.values.slice();players.push({name,times,values});transfer.push(times.buffer,values.buffer);}
+  const players=[],transfer=[];for(const[key,p]of tracks){const times=p.times.slice(),values=p.values.slice();players.push({name:p.name,equipe:p.equipe,times,values});transfer.push(times.buffer,values.buffer);}
   self.postMessage({players,...extra},transfer);
 };

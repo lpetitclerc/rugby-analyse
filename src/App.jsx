@@ -6,6 +6,7 @@ import PossessionsPage from './pages/PossessionsPage'
 import RucksPage from './pages/RucksPage'
 import JeuPiedPage from './pages/JeuPiedPage'
 import GpsPage from './pages/GpsPage'
+import GpsViewerPage from './pages/GpsViewerPage'
 import './App.css'
 
 // Pour un déploiement à la racine du domaine.
@@ -45,7 +46,10 @@ function App() {
               to="/gps"
               className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
             >
-              GPS &amp; Vidéo
+              GPS – Administration
+            </NavLink>
+            <NavLink to="/gps-visualisation" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+              GPS – Visualisation
             </NavLink>
           </div>
         </nav>
@@ -85,6 +89,13 @@ function App() {
               />
             }
           />
+          <Route path="/gps-visualisation" element={
+            <GpsViewerPage
+              key={JSON.stringify([saison, journee, matchId])}
+              saison={saison} journee={journee} matchId={matchId}
+              assetsBase={GPS_ASSETS_BASE}
+            />
+          } />
         </Routes>
       </div>
     </BrowserRouter>
