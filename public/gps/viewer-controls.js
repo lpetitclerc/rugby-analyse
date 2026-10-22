@@ -4,12 +4,12 @@
   const init = () => {
     if (document.getElementById('viewer-toolbar')) return;
     document.documentElement.classList.add('gps-viewer-mode');
-    const full = document.getElementById('full');
     const play = document.getElementById('play');
     const seek = document.getElementById('seek');
     const video = document.getElementById('open-video');
     const controls = document.querySelector('.controls');
     if (!controls || !seek || !play) return;
+    document.getElementById('focus')?.closest('label')?.remove();
 
     const toolbar = document.createElement('span');
     toolbar.id = 'viewer-toolbar';
@@ -23,7 +23,7 @@
     }
     function jump(seconds) {
       const min=Number(seek.min)||0, max=Number(seek.max)||0;
-      const next=Math.max(min,Math.min(max,Number(seek.value)+seconds*1000));
+      const next=SyncMath.shift(Number(seek.value),seconds*1000,min,max);
       seek.value=String(next);
       seek.dispatchEvent(new Event('input',{bubbles:true}));
       seek.dispatchEvent(new Event('change',{bubbles:true}));
@@ -46,30 +46,7 @@
       controls.appendChild(b);
     }
 
-    // Le plein écran est demandé sur le document entier afin d'inclure
-    // terrain, listes de joueuses et barre de lecture.
-    const fullscreenButton=full||document.createElement('button');
-    fullscreenButton.textContent='⛶ Plein écran';
-    fullscreenButton.title='Afficher ou quitter le plein écran';
-    if (!full) { fullscreenButton.id='full'; controls.appendChild(fullscreenButton); }
-    else { full.style.display='none'; controls.appendChild(fullscreenButton); full.style.display=''; }
-    // Remplacer l'ancien handler qui pouvait cibler seulement le canvas.
-    const newFull=fullscreenButton.cloneNode(true);
-    newFull.id='viewer-fullscreen';
-    fullscreenButton.replaceWith(newFull);
-    newFull.addEventListener('click',async()=>{
-      try {
-        if (document.fullscreenElement) await document.exitFullscreen();
-        else await document.documentElement.requestFullscreen();
-      } catch(err) { console.error('Plein écran refusé :',err); }
-    });
-    const syncFull=()=>{
-      document.documentElement.classList.toggle('viewer-is-fullscreen',!!document.fullscreenElement);
-      newFull.textContent=document.fullscreenElement?'⤢ Quitter plein écran':'⛶ Plein écran';
-      window.dispatchEvent(new Event('resize'));
-    };
-    document.addEventListener('fullscreenchange',syncFull);
-    syncFull();
+    controls.appendChild(document.getElementById('full'));
   };
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();

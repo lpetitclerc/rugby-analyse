@@ -47,6 +47,7 @@ body.focus .footer{padding:8px 18px}
 body.focus .message{display:none}
 #leave{display:none}
 body.focus #leave{display:block}
+body.focus #full{display:none}
 
 
 .video-panel{display:grid;gap:10px;margin-bottom:26px;padding-bottom:20px;border-bottom:1px solid #304049}.video-panel h2{margin-bottom:4px}.video-panel label{font-size:12px;color:#a6b8c0}.video-panel input[type=url]{width:100%;min-width:0;padding:9px;background:#101b22;color:white;border:1px solid #41545e;border-radius:8px}.video-panel .video-import{display:block;text-align:center;color:white}#local-video{display:none}#sync-status{font-size:12px;line-height:1.5;color:#adc1c9;margin:0;overflow-wrap:anywhere}.timeline-caption{display:flex;justify-content:space-between;gap:12px;color:#adc1c9;font-size:12px;margin-top:12px}button:disabled{opacity:.45;cursor:default}.video-panel button{width:100%}

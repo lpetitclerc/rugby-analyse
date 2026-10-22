@@ -114,7 +114,7 @@ try {
     setBusy(false);
 
     // Informe le pont Supabase que l'import est terminé
-    window.dispatchEvent(new Event('gps-import-done'));
+    window.dispatchEvent(new CustomEvent('gps-import-done', { detail: data }));
 
     let count = 0;
     let bytes = 0;
@@ -132,14 +132,15 @@ try {
       `${data.errors.join(' ')}`;
   };
 
-  worker.onerror = () => {
+  worker.onerror = (event) => {
     setBusy(false);
     worker.terminate();
     worker = null;
     $('file').disabled = true;
 
-    $('message').textContent =
-      'Import indisponible. Vérifiez gps-worker.js.';
+    const message = event.message || 'Import indisponible. Vérifiez gps-worker.js.';
+    $('message').textContent = message;
+    window.dispatchEvent(new CustomEvent('gps-import-error', { detail: message }));
   };
 
 } catch (error) {

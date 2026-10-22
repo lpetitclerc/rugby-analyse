@@ -1,21 +1,109 @@
-// La demande native part du clic. Les changements natifs (dont Échap)
-// pilotent l'interface, et la sortie reste accessible dans le pied de page.
-function nativeFullscreen(){return document.fullscreenElement||document.webkitFullscreenElement;}
-function terrainView(active){document.body.classList.toggle('focus',active);$('focus').checked=active;$('full').textContent=active?'Quitter le plein écran':'Plein écran';}
-async function leaveTerrain(){const exit=document.exitFullscreen||document.webkitExitFullscreen;try{if(nativeFullscreen()&&exit)await exit.call(document);}catch{}terrainView(false);$('message').style.display='';}
-async function toggleFullscreen(){
-  if(nativeFullscreen()||document.body.classList.contains('focus')){await leaveTerrain();return;}
-  const request=document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen;
-  try{if(!request)throw Error('API indisponible');await request.call(document.documentElement);terrainView(true);}
-  catch{terrainView(true);$('message').textContent='Vue terrain activée. Le navigateur bloque le plein écran natif dans cette fenêtre : ouvrez la page dans un onglet normal et utilisez F11 si nécessaire.';$('message').style.display='block';}
+const viewerMode = new URLSearchParams(window.location.search).get('viewer') === '1'
+const fullscreenButton = $('full')
+const focusCheckbox = $('focus')
+const statusMessage = $('message')
+let fallbackFocus = false
+
+function nativeFullscreen() {
+  return document.fullscreenElement || document.webkitFullscreenElement
 }
-$('full').onclick=toggleFullscreen;
-$('leave').onclick=leaveTerrain;
-$('focus').onchange=e=>{if(!e.target.checked&&nativeFullscreen())leaveTerrain();else terrainView(e.target.checked);};
-function syncFullscreen(){terrainView(Boolean(nativeFullscreen()));$('message').style.display='';}
-document.addEventListener('fullscreenchange',syncFullscreen);
-document.addEventListener('webkitfullscreenchange',syncFullscreen);
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){terrainView(false);$('message').style.display='';}
-  if(e.code==='Space'&&!['INPUT','SELECT','BUTTON'].includes(document.activeElement.tagName)){e.preventDefault();$('play').click();}
-});
+
+function updateFullscreenState() {
+  const active = Boolean(nativeFullscreen())
+  if (active) fallbackFocus = false
+  document.documentElement.classList.toggle('viewer-is-fullscreen', viewerMode && active)
+  document.body.classList.toggle('focus', !viewerMode && (active || fallbackFocus))
+  focusCheckbox.checked = !viewerMode && (active || fallbackFocus)
+  fullscreenButton.textContent = active
+    ? (viewerMode ? '⤢ Quitter plein écran' : 'Quitter le plein écran')
+    : (viewerMode ? '⛶ Plein écran' : 'Plein écran')
+  fullscreenButton.setAttribute('aria-pressed', String(active))
+  if (statusMessage) statusMessage.style.display = ''
+  window.dispatchEvent(new Event('resize'))
+}
+
+async function exitFullscreen() {
+  const exit = document.exitFullscreen || document.webkitExitFullscreen
+  if (nativeFullscreen() && exit) {
+    try {
+      await exit.call(document)
+    } catch (error) {
+      if (statusMessage) {
+        statusMessage.textContent = `Impossible de quitter le plein écran : ${error.message || error}`
+        statusMessage.style.display = 'block'
+      }
+    }
+  }
+  if (!nativeFullscreen()) {
+    fallbackFocus = false
+    updateFullscreenState()
+  }
+}
+
+async function toggleFullscreen() {
+  if (nativeFullscreen()) {
+    await exitFullscreen()
+    return
+  }
+
+  const request = document.documentElement.requestFullscreen ||
+    document.documentElement.webkitRequestFullscreen
+  if (!request) {
+    if (!viewerMode) {
+      fallbackFocus = true
+      updateFullscreenState()
+    }
+    if (statusMessage) {
+      statusMessage.textContent = viewerMode
+        ? 'Le plein écran natif n’est pas disponible dans ce navigateur.'
+        : 'Vue terrain activée. Le plein écran natif n’est pas disponible dans cette fenêtre.'
+      statusMessage.style.display = 'block'
+    }
+    return
+  }
+
+  try {
+    await request.call(document.documentElement)
+  } catch (error) {
+    if (!viewerMode) {
+      fallbackFocus = true
+      updateFullscreenState()
+    }
+    if (statusMessage) {
+      statusMessage.textContent = viewerMode
+        ? `Plein écran refusé par le navigateur : ${error.message || error}`
+        : `Vue terrain activée, mais le plein écran a été refusé : ${error.message || error}`
+      statusMessage.style.display = 'block'
+    }
+  } finally {
+    updateFullscreenState()
+  }
+}
+
+fullscreenButton.addEventListener('click', toggleFullscreen)
+$('leave').addEventListener('click', exitFullscreen)
+focusCheckbox.addEventListener('change', (event) => {
+  if (viewerMode) return
+  if (!event.target.checked && nativeFullscreen()) {
+    exitFullscreen()
+    return
+  }
+  fallbackFocus = event.target.checked
+  document.body.classList.toggle('focus', fallbackFocus)
+  if (fallbackFocus) $('message').style.display = 'none'
+})
+
+document.addEventListener('fullscreenchange', updateFullscreenState)
+document.addEventListener('webkitfullscreenchange', updateFullscreenState)
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && fallbackFocus && !nativeFullscreen()) {
+    fallbackFocus = false
+    updateFullscreenState()
+  }
+  if (event.code === 'Space' && !['INPUT', 'SELECT', 'BUTTON'].includes(document.activeElement.tagName)) {
+    event.preventDefault()
+    $('play').click()
+  }
+})
+
+updateFullscreenState()

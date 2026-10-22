@@ -7,6 +7,7 @@ function state(){const duration=Number.isFinite(media.duration)?media.duration:0
   const option=[...el('rate').options].find(x=>Number(x.value)===media.playbackRate);if(option)el('rate').value=option.value;
   send({type:'state',time:media.currentTime,duration,paused:media.paused,waiting:waiting||media.seeking,rate:media.playbackRate,ready:media.readyState>=1&&!media.error});
 }
+function seekTo(time){if(!Number.isFinite(media.duration))return;media.currentTime=SyncMath.clamp(time,0,media.duration);}
 async function play(){try{await media.play();}catch{el('message').textContent='Cliquez sur Lecture dans cette fenêtre pour autoriser la vidéo.';send({type:'error',message:'Lecture vidéo bloquée : cliquez sur Lecture dans la fenêtre vidéo.'});state();}}
 window.addEventListener('message',({source,origin:from,data})=>{
   if(source!==owner||from!==origin||data?.channel!=='gps-video')return;
@@ -16,15 +17,15 @@ window.addEventListener('message',({source,origin:from,data})=>{
   if(data.type==='command'){
     if(data.action==='pause')media.pause();
     if(data.action==='play')play();
-    if(data.action==='seek'&&Number.isFinite(data.time)&&Number.isFinite(media.duration)){media.currentTime=Math.max(0,Math.min(media.duration,data.time));}
-    if(data.action==='rate'){try{media.playbackRate=data.rate;}catch{send({type:'error',message:'Cette vitesse n’est pas acceptée par le lecteur vidéo.'});}}
+    if(data.action==='seek'&&Number.isFinite(data.time)&&Number.isFinite(media.duration))seekTo(data.time);
+    if(data.action==='rate'){if(!Number.isFinite(data.rate)||data.rate<=0){send({type:'error',message:'Cette vitesse n’est pas valide.'});return;}try{media.playbackRate=data.rate;}catch{send({type:'error',message:'Cette vitesse n’est pas acceptée par le lecteur vidéo.'});}}
     state();
   }
 });
 ['loadedmetadata','durationchange','timeupdate','play','pause','ratechange','seeking','seeked','ended'].forEach(name=>media.addEventListener(name,()=>{if(name==='seeked')waiting=media.readyState<3;state();}));
 media.addEventListener('waiting',()=>{waiting=true;state();});media.addEventListener('playing',()=>{waiting=false;state();});media.addEventListener('canplay',()=>{waiting=false;state();});
 media.addEventListener('error',()=>{waiting=true;el('message').textContent='Vidéo inaccessible ou format non pris en charge. Utilisez un fichier local ou une URL directe MP4/WebM.';send({type:'error',message:el('message').textContent});state();});
-el('play').onclick=()=>media.paused?play():media.pause();el('zero').onclick=()=>{media.pause();media.currentTime=0;};el('timeline').oninput=e=>media.currentTime=Number(e.target.value);el('rate').onchange=e=>{try{media.playbackRate=Number(e.target.value);}catch{el('message').textContent='Vitesse non prise en charge.';}};
+el('play').onclick=()=>media.paused?play():media.pause();el('zero').onclick=()=>{media.pause();seekTo(0);};el('backward').onclick=()=>seekTo(media.currentTime-10);el('forward').onclick=()=>seekTo(media.currentTime+10);el('timeline').oninput=e=>seekTo(Number(e.target.value));el('rate').onchange=e=>{try{media.playbackRate=Number(e.target.value);}catch{el('message').textContent='Vitesse non prise en charge.';}};
 setInterval(state,100);
 setInterval(()=>{if(!owner||owner.closed){media.pause();el('connection').textContent='Fenêtre GPS déconnectée';}},1000);
 if(owner)send({type:'ready'});else el('message').textContent='Ouvrez cette fenêtre avec le bouton Vidéo de l’application GPS.';

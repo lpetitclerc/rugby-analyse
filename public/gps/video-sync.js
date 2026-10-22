@@ -6,7 +6,7 @@
   const status=text=>$('sync-status').textContent=text;
   const send=data=>{if(popup&&!popup.closed&&ready)popup.postMessage({channel:'gps-video',sourceId,...data},origin);};
   const command=(action,extra={})=>send({type:'command',action,...extra});
-  function seconds(){if(!state)return 0;const elapsed=!state.paused&&!state.waiting?Math.min(250,Math.max(0,performance.now()-receivedAt))*state.rate/1000:0;return Math.min(state.duration,state.time+elapsed);}
+  function seconds(){if(!state)return 0;const elapsed=!state.paused&&!state.waiting?Math.min(250,Math.max(0,performance.now()-receivedAt))*state.rate/1000:0;return SyncMath.clamp(state.time+elapsed,0,state.duration);}
   function range(){return SyncMath.range(anchor,start,end,state?.duration||0);}
   function restoreRange(){$('seek').min=0;$('seek').max=end-start;}
   function unlink(message='Timelines indépendantes. Placez les deux curseurs, puis synchronisez.'){
@@ -51,7 +51,7 @@
   const gpsPlay=$('play').onclick,gpsReset=$('reset').onclick,gpsSeek=$('seek').oninput;
   $('play').onclick=()=>{if(!linked){gpsPlay();return;}const r=range();if(seconds()>=r.max-.02){command('seek',{time:r.min});state={...state,time:r.min,paused:true};receivedAt=performance.now();}command(state.paused?'play':'pause');};
   $('reset').onclick=()=>{if(!linked){gpsReset();return;}command('pause');command('seek',{time:range().min});};
-  $('seek').oninput=e=>{if(!linked){gpsSeek(e);return;}const r=range(),t=Math.max(r.min,Math.min(r.max,SyncMath.video(anchor,start+Number(e.target.value))));current=SyncMath.gps(anchor,t);state={...state,time:t,waiting:true};receivedAt=performance.now();command('seek',{time:t});};
+  $('seek').oninput=e=>{if(!linked){gpsSeek(e);return;}const r=range(),t=SyncMath.clamp(SyncMath.video(anchor,start+Number(e.target.value)),r.min,r.max);current=SyncMath.gps(anchor,t);state={...state,time:t,waiting:true};receivedAt=performance.now();command('seek',{time:t});};
   $('rate').onchange=e=>{if(linked)command('rate',{rate:Number(e.target.value)});};
   let restoredSync=null;
   window.videoSync={
@@ -70,7 +70,7 @@
     dispose(){command('pause');if(popup&&!popup.closed)popup.close();},
     reset(){if(linked)command('pause');unlink();},
     pause(){if(linked)command('pause');},
-    tick(){if(!linked||!state)return;const r=range(),t=seconds(),bounded=Math.max(r.min,Math.min(r.max,t));
+    tick(){if(!linked||!state)return;const r=range(),t=seconds(),bounded=SyncMath.clamp(t,r.min,r.max);
       current=SyncMath.gps(anchor,bounded);playing=!state.paused;updatePlay();
       $('match-time').textContent='Temps vidéo : '+formatRelative(bounded);
       if(t<r.min-.01||t>r.max+.01||(!state.paused&&t>=r.max)){

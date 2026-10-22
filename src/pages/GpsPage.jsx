@@ -1,57 +1,18 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { sendGpsMatchToFrame } from '../lib/gps-frame'
+import {
+  appendGpsFiles,
+  discoverGpsFiles,
+  normalizeGpsBucket,
+  normalizeGpsDay,
+  normalizeGpsFiles
+} from '../lib/gps-storage'
 import './GpsPage.css'
 
 const EMPTY_FILES = {
   domicile: [],
   exterieur: []
-}
-
-function normaliserJournee(journee) {
-  const valeur = String(journee ?? '').trim()
-  return /^J/i.test(valeur) ? valeur : `J${valeur}`
-}
-
-function normaliserFichiers(value) {
-  const data = value && typeof value === 'object' ? value : {}
-
-  return {
-    domicile: Array.isArray(data.domicile) ? data.domicile : [],
-    exterieur: Array.isArray(data.exterieur) ? data.exterieur : []
-  }
-}
-
-async function retrouverFichiersGps(bucket, journee, matchId) {
-  const resultat = {
-    domicile: [],
-    exterieur: []
-  }
-
-  for (const equipe of ['domicile', 'exterieur']) {
-    const dossier = `${journee}/gps/${matchId}/${equipe}`
-
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .list(dossier, { limit: 1000 })
-
-    if (error) throw error
-
-    resultat[equipe] = (data || [])
-      .filter((f) => f.name.toLowerCase().endsWith('.csv'))
-      .map((f) => ({
-        id: f.id || f.name,
-        nom: f.name.replace(
-          /^[0-9a-f]{8}-[0-9a-f-]{27,}_/i,
-          ''
-        ),
-        bucket,
-        path: `${dossier}/${f.name}`,
-        taille: f.metadata?.size || 0,
-        importe_le: f.created_at || null
-      }))
-  }
-
-  return resultat
 }
 
 export default function GpsPage({
@@ -62,15 +23,16 @@ export default function GpsPage({
 }) {
   const frameRef = useRef(null)
   const [videoUrl, setVideoUrl] = useState('')
-  const [gpsSettings, setGpsSettings] = useState({})
   const [gpsVideo, setGpsVideo] = useState({})
   const settingsRef = useRef({})
+  const gpsVideoRef = useRef({})
   const saveTimer = useRef(null)
   const activeMatchRef = useRef(matchId)
   activeMatchRef.current = matchId
   const [iframeReady, setIframeReady] = useState(false)
   const [loadedMatchId, setLoadedMatchId] = useState(null)
   const [iframeVersion, setIframeVersion] = useState(0)
+  const loadRequestRef = useRef(null)
   const loadingSequence = useRef(0)
 
   const [gpsFiles, setGpsFiles] = useState(EMPTY_FILES)
@@ -81,15 +43,8 @@ export default function GpsPage({
 
   const gpsUrl = `${assetsBase.replace(/\/?$/, '/')}index.html`
 
-  const saisonNormalisee = String(saison || '')
-  .trim()
-  .replace(/-/g, '_')
-
-  const bucket = saisonNormalisee.startsWith('saison_')
-  ? saisonNormalisee
-  : `saison_${saisonNormalisee}`
-
-  const dossierJournee = normaliserJournee(journee)
+  const bucket = normalizeGpsBucket(saison)
+  const dossierJournee = normalizeGpsDay(journee)
 
   const canUpload = Boolean(saison && journee && matchId)
 
@@ -109,7 +64,7 @@ export default function GpsPage({
     setLoadedMatchId(null)
     clearTimeout(saveTimer.current)
     settingsRef.current = {}
-    setGpsSettings({})
+    gpsVideoRef.current = {}
     setGpsVideo({})
     setVideoUrl('')
     let cancelled = false
@@ -146,21 +101,18 @@ export default function GpsPage({
       } else {
         const params = data.gps_parametres || {}
         settingsRef.current = params
-        setGpsSettings(params)
-        setGpsVideo(data.gps_video || {})
+        gpsVideoRef.current = data.gps_video || {}
+        setGpsVideo(gpsVideoRef.current)
         setVideoUrl(data.gps_video?.url || '')
-        let fichiers = normaliserFichiers(data.gps_fichiers)
+        let fichiers = normalizeGpsFiles(data.gps_fichiers)
 
         try {
-          const trouves = await retrouverFichiersGps(bucket, dossierJournee, matchId)
-          const fusion = { domicile: [], exterieur: [] }
-          for (const equipe of ['domicile', 'exterieur']) {
-            const parChemin = new Map()
-            for (const f of [...fichiers[equipe], ...trouves[equipe]]) {
-              if (f.path) parChemin.set(f.path, f)
-            }
-            fusion[equipe] = [...parChemin.values()]
-          }
+          const fusion = await discoverGpsFiles(supabase.storage, {
+            bucket,
+            journee: dossierJournee,
+            matchId,
+            manifest: fichiers
+          })
           if (cancelled) return
           if (JSON.stringify(fusion) !== JSON.stringify(fichiers)) {
             const { data: savedRows, error: saveError } = await supabase
@@ -172,7 +124,7 @@ export default function GpsPage({
             if (saveError) throw saveError
 
             if (savedRows?.length === 1) {
-              fichiers = normaliserFichiers(savedRows[0].gps_fichiers)
+              fichiers = normalizeGpsFiles(savedRows[0].gps_fichiers)
             } else {
               console.error('Aucune ligne mise à jour', {
                 matchId,
@@ -236,6 +188,7 @@ export default function GpsPage({
         .then(({data:saved,error:saveError})=>{
           if (saveError) { setError(saveError.message); return }
           if (activeMatchRef.current !== matchId) return
+          gpsVideoRef.current = saved.gps_video
           setGpsVideo(saved.gps_video)
           setVideoUrl(url)
         })
@@ -248,13 +201,18 @@ export default function GpsPage({
     }
 
     if (data.type === 'GPS_MATCH_LOADED') {
-      setMessage(
-        `${data.count} fichier(s) GPS chargé(s) dans le terrain.`
-      )
+      if (data.requestId !== loadRequestRef.current) return
+      loadRequestRef.current = null
+      setMessage(`${data.count} fichier(s) GPS chargé(s) dans le terrain (${data.total} reçu(s)).`)
+      if (data.errors?.length) {
+        setError(`Certains fichiers GPS n'ont pas pu être importés : ${data.errors.join(' ')}`)
+      }
     }
 
     if (data.type === 'GPS_MATCH_ERROR') {
-      setError(data.message)
+      if (data.requestId !== loadRequestRef.current) return
+      loadRequestRef.current = null
+      setError(data.message || 'Erreur de chargement GPS.')
     }
   }
 
@@ -264,7 +222,7 @@ export default function GpsPage({
     window.removeEventListener('message', handleGpsMessage)
   }
 }, [matchId])
-  
+
   useEffect(() => {
   if (
     !iframeReady ||
@@ -279,6 +237,7 @@ export default function GpsPage({
   let cancelled = false
 
   async function chargerGps() {
+    loadRequestRef.current = null
     try {
       const entrees = [
         ...gpsFiles.domicile.map((f) => ({
@@ -295,26 +254,6 @@ export default function GpsPage({
         `Chargement de ${entrees.length} fichier(s) GPS...`
       )
 
-      const fichiers = await Promise.all(
-        entrees.map(async (entree) => {
-          const { data, error: downloadError } =
-            await supabase.storage
-              .from(entree.bucket || bucket)
-              .download(entree.path)
-
-          if (downloadError) throw downloadError
-
-          return {
-            equipe: entree.equipe,
-            file: new File(
-              [data],
-              entree.nom,
-              { type: 'text/csv' }
-            )
-          }
-        })
-      )
-
       if (
         cancelled ||
         sequence !== loadingSequence.current
@@ -322,28 +261,28 @@ export default function GpsPage({
         return
       }
 
-      frameRef.current?.contentWindow?.postMessage(
-        { type: 'GPS_SETTINGS_APPLY', matchId, settings: gpsSettings, video: gpsVideo },
-        window.location.origin
-      )
-
-      frameRef.current?.contentWindow?.postMessage(
-        {
-          type: 'GPS_LOAD_MATCH',
-          matchId,
-          fichiers
-        },
-        window.location.origin
-      )
+      const requestId = await sendGpsMatchToFrame({
+        storage: supabase.storage,
+        target: frameRef.current?.contentWindow,
+        origin: window.location.origin,
+        matchId,
+        bucket,
+        files: entrees,
+        settings: settingsRef.current,
+        video: gpsVideoRef.current,
+        isCurrent: () => !cancelled && sequence === loadingSequence.current
+      })
+      if (!requestId) return
+      loadRequestRef.current = requestId
 
       console.log(
         'GPS envoyés à l’iframe :',
         matchId,
-        fichiers.length
+        entrees.length
       )
 
     } catch (err) {
-      if (!cancelled) {
+      if (!cancelled && sequence === loadingSequence.current) {
         console.error('Chargement GPS :', err)
         setError(
           `Impossible de charger les CSV : ${err.message}`
@@ -365,9 +304,7 @@ export default function GpsPage({
   loading,
   gpsFiles,
   bucket,
-  iframeVersion,
-  gpsSettings,
-  gpsVideo
+  iframeVersion
 ]
 )
 
@@ -398,12 +335,13 @@ export default function GpsPage({
         return
       }
     }
-    const value = { ...gpsVideo, url, type: 'url' }
+    const value = { ...gpsVideoRef.current, url, type: 'url' }
     const { data, error: saveError } = await supabase.from('match')
       .update({ gps_video: value }).eq('uuid_match', matchId)
       .select('gps_video').single()
     if (saveError) { setError(saveError.message); return }
-    setGpsVideo(data.gps_video || value)
+    gpsVideoRef.current = data.gps_video || value
+    setGpsVideo(gpsVideoRef.current)
     frameRef.current?.contentWindow?.postMessage(
       { type: 'GPS_VIDEO_APPLY', matchId, video: data.gps_video || value },
       window.location.origin
@@ -430,20 +368,10 @@ export default function GpsPage({
     setUploadingTeam(equipe)
     setError('')
     setMessage('')
+    const nouveauxFichiers = []
+    let phaseImport = 'upload'
 
     try {
-      // Relecture de la version enregistrée en base
-      const { data: matchData, error: readError } = await supabase
-        .from('match')
-        .select('gps_fichiers')
-        .eq('uuid_match', matchId)
-        .single()
-
-      if (readError) throw readError
-
-      const manifest = normaliserFichiers(matchData.gps_fichiers)
-      const nouveauxFichiers = []
-
       for (const file of fichiers) {
         // Préfixe unique pour éviter d'écraser un autre import
         const id = crypto.randomUUID()
@@ -477,21 +405,36 @@ export default function GpsPage({
         })
       }
 
-      const updatedManifest = {
-        ...manifest,
-        [equipe]: [
-          ...manifest[equipe],
-          ...nouveauxFichiers
-        ]
+      phaseImport = 'manifest'
+      // Read the latest manifest after uploads so concurrent completed imports are included.
+      const { data: matchData, error: readError } = await supabase
+        .from('match')
+        .select('gps_fichiers')
+        .eq('uuid_match', matchId)
+        .single()
+      if (readError) {
+        throw new Error(
+          `CSV téléversés, mais lecture du manifeste impossible : ${readError.message}`
+        )
       }
+      const updatedManifest = appendGpsFiles(
+        matchData.gps_fichiers,
+        equipe,
+        nouveauxFichiers
+      )
 
       const { data: saved, error: updateError } = await supabase
         .from('match')
         .update({ gps_fichiers: updatedManifest })
         .eq('uuid_match', matchId)
         .select('gps_fichiers').single()
-      if (updateError) throw updateError
-      setGpsFiles(normaliserFichiers(saved.gps_fichiers))
+      if (updateError) {
+        throw new Error(
+          `CSV téléversés, mais mise à jour du manifeste impossible : ${updateError.message}. ` +
+          'Le rechargement Admin pourra les retrouver dans Storage.'
+        )
+      }
+      setGpsFiles(normalizeGpsFiles(saved.gps_fichiers))
       setIframeReady(false)
       setIframeVersion((version) => version + 1)
       setMessage(
@@ -500,9 +443,10 @@ export default function GpsPage({
 
     } catch (err) {
       console.error('Erreur import GPS :', err)
-      setError(
-        err?.message || "Erreur lors de l'import GPS."
-      )
+      const details = err?.message || "Erreur lors de l'import GPS."
+      setError(phaseImport === 'upload' && nouveauxFichiers.length
+        ? `${details} ${nouveauxFichiers.length} fichier(s) ont déjà été téléversés et pourront être retrouvés au prochain chargement Admin.`
+        : details)
     } finally {
       setUploadingTeam(null)
     }
@@ -629,6 +573,7 @@ export default function GpsPage({
           allowFullScreen
           onLoad={() => {
             setIframeReady(false)
+            loadRequestRef.current = null
 
             frameRef.current?.contentWindow?.postMessage(
               { type: 'GPS_PING' },

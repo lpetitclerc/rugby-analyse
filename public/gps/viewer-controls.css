@@ -6,16 +6,12 @@
 .gps-viewer-mode .controls button { padding:6px 8px !important; font-size:11px !important; white-space:nowrap; }
 .gps-viewer-mode #viewer-toolbar { display:inline-flex; gap:4px; align-items:center; }
 .gps-viewer-mode #viewer-video-button { background:#355e73; border-color:#6b93a4; }
-.gps-viewer-mode #viewer-fullscreen { background:#354e44; border-color:#6a8b75; }
+.gps-viewer-mode #full { background:#354e44; border-color:#6a8b75; }
 .gps-viewer-mode .video-panel #open-video { display:none !important; }
 .gps-viewer-mode .video-panel { display:none !important; }
-.gps-viewer-mode #gps-viewer-columns { min-height:0; max-width:100%; }
-.gps-viewer-mode .gps-viewer-center { min-width:0; overflow:hidden; }
-.gps-viewer-mode .gps-viewer-center .stage { min-width:0; overflow:hidden; }
-.gps-viewer-mode .gps-viewer-center canvas { max-width:100%; }
 .gps-viewer-mode:fullscreen,
 .gps-viewer-mode.viewer-is-fullscreen { width:100%; height:100%; }
-.gps-viewer-mode.viewer-is-fullscreen body { height:100vh; }
+.gps-viewer-mode.viewer-is-fullscreen body { height:100dvh; }
 .gps-viewer-mode.viewer-is-fullscreen main { flex:1; overflow:auto; }
 @media(max-width:720px) {
  .gps-viewer-mode .controls { flex-wrap:wrap; }

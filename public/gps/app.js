@@ -19,8 +19,6 @@ function gpsViewerLayout(){
   const awayTitle=document.createElement('h3');awayTitle.textContent='Extérieur';right.append(awayTitle);
   pitchHost.parentNode.insertBefore(layout,pitchHost);
   middle.append(pitchHost);layout.append(left,middle,right);
-  // Les anciennes commandes sont conservées hors de la grille ; seule la liste est déplacée.
-  players.style.display='none';
 }
 function menu(){
   if(window.gpsViewerMode)gpsViewerLayout();
@@ -142,20 +140,8 @@ window.addEventListener('message', event => {
   window.gpsViewerMode=Boolean(event.data.enabled);
   document.documentElement.classList.toggle('gps-viewer-mode',window.gpsViewerMode);
   if(!window.gpsViewerMode)return;
-  document.body.classList.add('gps-viewer-mode');gpsViewerLayout();
-  const style=document.createElement('style');style.textContent=`
-    .gps-viewer-mode .import, .gps-viewer-mode input[type=file], .gps-viewer-mode label[for=file],
-    .gps-viewer-mode #terrain-form,
-    .gps-viewer-mode #terrain-status, .gps-viewer-mode .terrain-settings,
-    .gps-viewer-mode .terrain-controls, .gps-viewer-mode .camera-controls,
-    .gps-viewer-mode .camera-view, .gps-viewer-mode .vue-camera { display:none!important; }
-    .gps-team-heading { margin:16px 0 8px; font-size:15px; font-weight:700; border-bottom:1px solid #8885; padding-bottom:6px; }
-  `;document.head.append(style);
-  for(const el of document.querySelectorAll('h1,h2,h3,summary,button')) {
-    if(/^(terrain|vue cam[eé]ra|cam[eé]ra)$/i.test(el.textContent.trim())) {
-      const section=el.closest('details,section,.panel,.card');if(section && !section.contains($('pitch')))section.style.display='none';
-    }
-  }
+  document.body.classList.add('gps-viewer-mode');
+  gpsViewerLayout();
   for(const p of roster.values()) if(!gpsPersistedDisplay.players?.[p.id]?.color && !savedColor(p.id)) p.color=p.equipe==='exterieur'?'#2563eb':'#dc2626';
   menu();
 });

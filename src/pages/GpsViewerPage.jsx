@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { sendGpsMatchToFrame } from '../lib/gps-frame'
+import {
+  discoverGpsFiles,
+  normalizeGpsBucket,
+  normalizeGpsDay
+} from '../lib/gps-storage'
 import './GpsViewerPage.css'
-
-const normJournee = v => /^J/i.test(String(v || '')) ? String(v) : `J${v}`
-const normFiles = v => ({ domicile: Array.isArray(v?.domicile) ? v.domicile : [], exterieur: Array.isArray(v?.exterieur) ? v.exterieur : [] })
 
 export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '/gps/' }) {
   const frameRef = useRef(null)
@@ -13,10 +16,9 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const bucket = useMemo(() => {
-    const s = String(saison || '').trim().replace(/-/g, '_')
-    return s.startsWith('saison_') ? s : `saison_${s}`
-  }, [saison])
+  const loadRequestRef = useRef(null)
+  const bucket = normalizeGpsBucket(saison)
+  const normalizedDay = normalizeGpsDay(journee)
 
   useEffect(() => {
     let cancelled = false
@@ -28,28 +30,22 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
         const { data, error: err } = await supabase.from('match')
           .select('gps_fichiers,gps_parametres,gps_video').eq('uuid_match', matchId).single()
         if (err) throw err
-        const manifest = normFiles(data.gps_fichiers)
-        const combined = []
-        for (const team of ['domicile', 'exterieur']) {
-          const directory = `${normJournee(journee)}/gps/${matchId}/${team}`
-          const { data: found, error: listError } = await supabase.storage.from(bucket).list(directory, { limit: 1000 })
-          if (listError) throw listError
-          const map = new Map()
-          for (const f of manifest[team]) if (f.path) map.set(f.path, { ...f, equipe: team })
-          for (const f of found || []) {
-            if (!f.name.toLowerCase().endsWith('.csv')) continue
-            const path = `${directory}/${f.name}`
-            if (!map.has(path)) map.set(path, { path, bucket, nom: f.name, equipe: team })
-          }
-          combined.push(...map.values())
-        }
+        const discovered = await discoverGpsFiles(supabase.storage, {
+          bucket,
+          journee: normalizedDay,
+          matchId,
+          manifest: data.gps_fichiers
+        })
+        const combined = ['domicile', 'exterieur'].flatMap((team) =>
+          discovered[team].map((file) => ({ ...file, equipe: team }))
+        )
         if (!cancelled) { setRecord(data); setFiles(combined) }
       } catch (e) { if (!cancelled) setError(e.message || String(e)) }
       finally { if (!cancelled) setLoading(false) }
     }
     load()
     return () => { cancelled = true }
-  }, [matchId, saison, journee, bucket])
+  }, [matchId, saison, journee, bucket, normalizedDay])
 
   useEffect(() => {
     function onMessage(event) {
@@ -57,8 +53,19 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
       const msg = event.data
       if (msg?.type === 'GPS_READY') setReady(true)
       if (msg?.matchId !== matchId) return
-      if (msg.type === 'GPS_MATCH_LOADED') setStatus(`${msg.count} fichier(s) GPS chargé(s).`)
-      if (msg.type === 'GPS_MATCH_ERROR') setError(msg.message || 'Erreur de chargement GPS')
+      if (msg.type === 'GPS_MATCH_LOADED') {
+        if (msg.requestId !== loadRequestRef.current) return
+        loadRequestRef.current = null
+        setStatus(`${msg.count} fichier(s) GPS chargé(s) (${msg.total} reçu(s)).`)
+        if (msg.errors?.length) {
+          setError(`Certains fichiers GPS n'ont pas pu être importés : ${msg.errors.join(' ')}`)
+        }
+      }
+      if (msg.type === 'GPS_MATCH_ERROR') {
+        if (msg.requestId !== loadRequestRef.current) return
+        loadRequestRef.current = null
+        setError(msg.message || 'Erreur de chargement GPS')
+      }
       // En mode visualisation, aucun message GPS_SETTINGS_CHANGED / GPS_VIDEO_CHANGED n'est enregistré.
     }
     window.addEventListener('message', onMessage)
@@ -69,18 +76,23 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
     if (!ready || !record || !matchId) return
     let cancelled = false
     async function send() {
+      loadRequestRef.current = null
       try {
         setLoading(true)
-        const downloaded = await Promise.all(files.map(async item => {
-          const { data, error: err } = await supabase.storage.from(item.bucket || bucket).download(item.path)
-          if (err) throw err
-          return { equipe: item.equipe, file: new File([data], item.nom || item.path.split('/').pop(), { type: 'text/csv' }) }
-        }))
-        if (cancelled) return
-        const target = frameRef.current?.contentWindow
-        target?.postMessage({ type: 'GPS_VIEWER_MODE', enabled: true }, window.location.origin)
-        target?.postMessage({ type: 'GPS_SETTINGS_APPLY', matchId, settings: record.gps_parametres || {}, video: record.gps_video || {} }, window.location.origin)
-        target?.postMessage({ type: 'GPS_LOAD_MATCH', matchId, fichiers: downloaded }, window.location.origin)
+        const requestId = await sendGpsMatchToFrame({
+          storage: supabase.storage,
+          target: frameRef.current?.contentWindow,
+          origin: window.location.origin,
+          matchId,
+          bucket,
+          files,
+          settings: record.gps_parametres || {},
+          video: record.gps_video || {},
+          viewerMode: true,
+          isCurrent: () => !cancelled
+        })
+        if (!requestId) return
+        loadRequestRef.current = requestId
         setStatus('Chargement des positions GPS…')
       } catch (e) { if (!cancelled) setError(e.message || String(e)) }
       finally { if (!cancelled) setLoading(false) }
@@ -91,11 +103,14 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
 
   return <section className="gps-viewer">
     {!matchId && <p>Sélectionnez un match.</p>}
+    {loading && <p role="status">Chargement des données GPS…</p>}
+    {status && <p role="status">{status}</p>}
     {error && <p className="gps-viewer-error" role="alert">{error}</p>}
     {matchId && <iframe key={matchId} ref={frameRef} src={`${assetsBase.replace(/\/?$/, '/') }index.html?viewer=1`}
       title="Visualisation GPS" className="gps-viewer-frame"
       allow="fullscreen; autoplay" allowFullScreen onLoad={() => {
         setReady(false)
+        loadRequestRef.current = null
         frameRef.current?.contentWindow?.postMessage({ type: 'GPS_PING' }, window.location.origin)
       }} />}
   </section>
