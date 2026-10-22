@@ -24,7 +24,7 @@ window.addEventListener('message',({source,origin:from,data})=>{
 });
 ['loadedmetadata','durationchange','timeupdate','play','pause','ratechange','seeking','seeked','ended'].forEach(name=>media.addEventListener(name,()=>{if(name==='seeked')waiting=media.readyState<3;state();}));
 media.addEventListener('waiting',()=>{waiting=true;state();});media.addEventListener('playing',()=>{waiting=false;state();});media.addEventListener('canplay',()=>{waiting=false;state();});
-media.addEventListener('error',()=>{waiting=true;el('message').textContent='Vidéo inaccessible ou format non pris en charge. Utilisez un fichier local ou une URL directe MP4/WebM.';send({type:'error',message:el('message').textContent});state();});
+media.addEventListener('error',()=>{waiting=true;el('message').textContent='Vidéo du match inaccessible ou format non pris en charge.';send({type:'error',message:el('message').textContent});state();});
 el('play').onclick=()=>media.paused?play():media.pause();el('zero').onclick=()=>{media.pause();seekTo(0);};el('backward').onclick=()=>seekTo(media.currentTime-10);el('forward').onclick=()=>seekTo(media.currentTime+10);el('timeline').oninput=e=>seekTo(Number(e.target.value));el('rate').onchange=e=>{try{media.playbackRate=Number(e.target.value);}catch{el('message').textContent='Vitesse non prise en charge.';}};
 setInterval(state,100);
 setInterval(()=>{if(!owner||owner.closed){media.pause();el('connection').textContent='Fenêtre GPS déconnectée';}},1000);

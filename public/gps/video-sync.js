@@ -1,7 +1,7 @@
 // La vidéo est l'horloge de référence après l'alignement.
 // Un message de son lecteur transporte la position réelle toutes les 100 ms.
 (() => {
-  let popup=null,ready=false,source=null,sourceId=0,blobUrl=null,state=null,receivedAt=0,linked=false,anchor=0;
+  let popup=null,ready=false,source=null,sourceId=0,state=null,receivedAt=0,linked=false,anchor=0;
   const origin=location.origin;
   const status=text=>$('sync-status').textContent=text;
   const send=data=>{if(popup&&!popup.closed&&ready)popup.postMessage({channel:'gps-video',sourceId,...data},origin);};
@@ -30,14 +30,11 @@
     if(!popup){status('Autorisez les fenêtres supplémentaires pour ouvrir le lecteur vidéo.');return false;}
     status('Ouverture du lecteur vidéo…');return true;
   }
-  function setSource(url,label){if(!url.startsWith('blob:'))window.parent.postMessage({type:'GPS_VIDEO_CHANGED',matchId:window.gpsActiveMatchId,video:{url,type:'url'}},origin);command('pause');unlink('Nouvelle vidéo. Attendez son chargement, puis alignez les curseurs.');state=null;$('sync').disabled=true;sourceId++;source={url,label};send({type:'source',...source});}
   $('open-video').onclick=openVideo;
-  $('local-video').onchange=e=>{const file=e.target.files[0];if(!file)return;if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=URL.createObjectURL(file);setSource(blobUrl,file.name);openVideo();e.target.value='';};
-  $('load-url').onclick=()=>{try{const url=new URL($('video-url').value.trim());if(!['http:','https:'].includes(url.protocol))throw Error();if(blobUrl){URL.revokeObjectURL(blobUrl);blobUrl=null;}setSource(url.href,url.href);openVideo();}catch{status('Saisissez une URL directe http(s) vers un fichier vidéo MP4 ou WebM.');}};
   $('sync').onclick=align;
   window.addEventListener('message',event=>{
     if(event.source!==popup||event.origin!==origin||event.data?.channel!=='gps-video')return;const data=event.data;
-    if(data.type==='ready'){ready=true;if(source)send({type:'source',...source});else status('Choisissez une vidéo locale ou indiquez son URL directe.');return;}
+    if(data.type==='ready'){ready=true;if(source)send({type:'source',...source});else status('Aucune vidéo configurée pour ce match.');return;}
     if(data.sourceId!==sourceId)return;
     if(data.type==='error'){command('pause');unlink(data.message);return;}
     if(data.type==='state'&&Number.isFinite(data.time)&&Number.isFinite(data.duration)&&Number.isFinite(data.rate)){
@@ -58,9 +55,15 @@
     restore(sync,video){
       if(sync) restoredSync=sync;
       const url=video?.url||'';
-      $('video-url').value=url;
       if(url && (!source || source.url!==url)) {
-        source={url,label:url};sourceId++;
+        if(source){
+          command('pause');
+          unlink('Nouvelle vidéo. Attendez son chargement, puis alignez les curseurs.');
+          restoredSync={...restoredSync,linked:false};
+          window.gpsNotifySettings?.({synchronisation:{anchor,linked:false}});
+        }
+        state=null;$('sync').disabled=true;
+        source={url,label:video.nom||url};sourceId++;
         if(ready) send({type:'source',...source});
       }
       if(restoredSync && Number.isFinite(restoredSync.anchor)) anchor=restoredSync.anchor;
@@ -80,5 +83,5 @@
   };
   function formatRelative(seconds){const ms=Math.floor(Math.max(0,seconds)*1000),s=Math.floor(ms/1000);return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':')+'.'+String(ms%1000).padStart(3,'0');}
   setInterval(()=>{if(popup?.closed){popup=null;ready=false;state=null;unlink('Fenêtre vidéo fermée. Les GPS sont indépendants.');}},500);
-  window.addEventListener('beforeunload',()=>{command('pause');if(blobUrl)URL.revokeObjectURL(blobUrl);});
+  window.addEventListener('beforeunload',()=>command('pause'));
 })();

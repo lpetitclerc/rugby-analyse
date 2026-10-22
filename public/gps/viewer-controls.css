@@ -7,8 +7,7 @@
 .gps-viewer-mode #viewer-toolbar { display:inline-flex; gap:4px; align-items:center; }
 .gps-viewer-mode #viewer-video-button { background:#355e73; border-color:#6b93a4; }
 .gps-viewer-mode #full { background:#354e44; border-color:#6a8b75; }
-.gps-viewer-mode .video-panel #open-video { display:none !important; }
-.gps-viewer-mode .video-panel { display:none !important; }
+.gps-viewer-mode header #open-video { display:none !important; }
 .gps-viewer-mode:fullscreen,
 .gps-viewer-mode.viewer-is-fullscreen { width:100%; height:100%; }
 .gps-viewer-mode.viewer-is-fullscreen body { height:100dvh; }

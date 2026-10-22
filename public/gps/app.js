@@ -1,7 +1,9 @@
 
 const $=id=>document.getElementById(id),colors=['#d5ff78','#53d7ff','#ff708a','#ffc45c','#ac9aff','#ff9b57','#62e6bc','#ed9de4','#ffffff','#55a5ff','#e4d767','#c777ff','#ef5350','#1ed4d4','#b7bbc9'];
 window.gpsViewerMode=new URLSearchParams(window.location.search).get('viewer')==='1';
+window.gpsAdminMode=new URLSearchParams(window.location.search).get('admin')==='1';
 if(window.gpsViewerMode)document.documentElement.classList.add('gps-viewer-mode');
+if(window.gpsAdminMode)document.documentElement.classList.add('gps-admin-mode');
 let roster=new Map(),start=0,end=0,current=0,playing=false,last=0,rect,canvas=$('pitch'),ctx=canvas.getContext('2d');
 function savedColor(id){try{return localStorage.getItem(id)}catch{return null}}
 function uid(name){return 'joueuse-'+Array.from(new TextEncoder().encode(name)).map(v=>v.toString(16).padStart(2,'0')).join('')}
@@ -60,11 +62,11 @@ function menu(){
       }
       dropdown.append(trigger,choices);palette.append(dropdown);
       label.append(palette);
-    }else{
+    }else if(!window.gpsAdminMode){
       for(const color of colors){const b=document.createElement('button');b.className='swatch';b.style.background=color;b.title=`Couleur ${color} pour ${p.name}`;b.setAttribute('aria-pressed',p.color===color);b.onclick=()=>{p.color=color;try{localStorage.setItem(p.id,color)}catch{}menu();window.gpsSaveDisplay?.()};palette.append(b)}
     }
     const stat=document.createElement('div');stat.className='stats';stat.id=p.id;p.stat=stat;
-    if(window.gpsViewerMode)box.append(label,stat);else box.append(label,palette,stat);
+    if(window.gpsViewerMode||window.gpsAdminMode)box.append(label,stat);else box.append(label,palette,stat);
     const target=window.gpsViewerMode?(p.equipe==='exterieur'?away:home):null;
     (target||$('players')).append(box);
   }

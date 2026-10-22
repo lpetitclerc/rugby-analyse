@@ -2,10 +2,12 @@
 :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#101b22;color:#edf4f4}
 *{box-sizing:border-box}
 body{margin:0;height:100dvh;display:flex;flex-direction:column}
-header{height:72px;display:flex;align-items:center;gap:20px;padding:14px 26px;border-bottom:1px solid #304049}
+header{min-height:72px;display:flex;align-items:center;gap:20px;padding:14px 26px;border-bottom:1px solid #304049}
 h1{font-size:20px;margin:0}
 small,.muted{color:#a6b8c0;font-size:12px}
 .brand{flex:1}
+.header-actions{display:flex;align-items:center;gap:8px}
+header button{white-space:nowrap}
 button,select,.import{background:#243640;border:1px solid #41545e;color:#fff;border-radius:8px;padding:10px 14px;cursor:pointer;font:inherit;font-size:13px}
 button:hover,.import:hover{background:#35515d}
 .primary{background:#b9f27b;color:#18311f;border:0;font-weight:700}
@@ -30,13 +32,13 @@ canvas{width:100%;height:100%;display:block}
 label{cursor:pointer}
 .settings{margin-top:25px;display:grid;gap:12px;font-size:13px}
 input[type=checkbox]{accent-color:#b9f27b}
-#file{display:none}
-@media(max-width:750px){header{padding:12px;gap:8px;height:auto}
+@media(max-width:750px){header{padding:12px;gap:8px;flex-wrap:wrap}
+header .brand{flex:1 0 100%}
 header small{display:none}
 aside{width:190px;padding:14px 10px}
 h1{font-size:16px}
 .footer{padding:12px}
-.import,header button{padding:8px;font-size:11px}
+header button{padding:8px;font-size:11px}
 }
 body.focus aside,body.focus header{display:none}
 body{overflow:hidden}
@@ -50,6 +52,10 @@ body.focus #leave{display:block}
 body.focus #full{display:none}
 
 
-.video-panel{display:grid;gap:10px;margin-bottom:26px;padding-bottom:20px;border-bottom:1px solid #304049}.video-panel h2{margin-bottom:4px}.video-panel label{font-size:12px;color:#a6b8c0}.video-panel input[type=url]{width:100%;min-width:0;padding:9px;background:#101b22;color:white;border:1px solid #41545e;border-radius:8px}.video-panel .video-import{display:block;text-align:center;color:white}#local-video{display:none}#sync-status{font-size:12px;line-height:1.5;color:#adc1c9;margin:0;overflow-wrap:anywhere}.timeline-caption{display:flex;justify-content:space-between;gap:12px;color:#adc1c9;font-size:12px;margin-top:12px}button:disabled{opacity:.45;cursor:default}.video-panel button{width:100%}
+#sync-status{font-size:12px;line-height:1.5;color:#adc1c9;margin:0 0 24px;overflow-wrap:anywhere}.timeline-caption{display:flex;justify-content:space-between;gap:12px;color:#adc1c9;font-size:12px;margin-top:12px}button:disabled{opacity:.45;cursor:default}
 
 .terrain-panel{margin-bottom:24px;border-bottom:1px solid #304049;padding-bottom:18px}.terrain-panel summary{cursor:pointer;font-size:13px;font-weight:700;line-height:1.5}.terrain-panel form{display:grid;gap:10px;margin-top:12px}.terrain-panel table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px}.terrain-panel th:first-child{width:28px}.terrain-panel td{padding:4px 2px}.terrain-panel input:not([type=checkbox]){width:100%;padding:8px 4px;background:#101b22;color:white;border:1px solid #41545e;border-radius:5px;min-width:0;font-size:11px}.terrain-panel label{font-size:12px}.terrain-panel p{font-size:12px;line-height:1.5;margin:0;color:#adc1c9}aside{width:300px;flex-shrink:0}@media(max-width:750px){aside{width:220px}}
+.gps-admin-mode aside > h2,
+.gps-admin-mode aside > #players,
+.gps-admin-mode aside > .settings,
+.gps-admin-mode aside > p.muted{display:none}

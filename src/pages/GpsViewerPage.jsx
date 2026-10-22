@@ -6,6 +6,7 @@ import {
   normalizeGpsBucket,
   normalizeGpsDay
 } from '../lib/gps-storage'
+import { createGpsVideoUrl } from '../lib/gps-video-storage'
 import './GpsViewerPage.css'
 
 export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '/gps/' }) {
@@ -14,7 +15,6 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
   const [record, setRecord] = useState(null)
   const [files, setFiles] = useState([])
   const [status, setStatus] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const loadRequestRef = useRef(null)
   const bucket = normalizeGpsBucket(saison)
@@ -22,7 +22,7 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
 
   useEffect(() => {
     let cancelled = false
-    setRecord(null); setFiles([]); setReady(false); setError(''); setStatus('')
+    setRecord(null); setFiles([]); setReady(false); setStatus('')
     if (!matchId || !saison || !journee) return
     async function load() {
       setLoading(true)
@@ -39,8 +39,20 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
         const combined = ['domicile', 'exterieur'].flatMap((team) =>
           discovered[team].map((file) => ({ ...file, equipe: team }))
         )
-        if (!cancelled) { setRecord(data); setFiles(combined) }
-      } catch (e) { if (!cancelled) setError(e.message || String(e)) }
+        let video = data.gps_video || {}
+        if (video.type === 'storage') {
+          try {
+            const url = await createGpsVideoUrl(supabase.storage, video, bucket)
+            video = { ...video, url }
+          } catch (videoError) {
+            console.error('GPS Viewer : impossible de charger la vidéo du match.', videoError)
+            video = {}
+          }
+        }
+        if (!cancelled) { setRecord({ ...data, gps_video: video }); setFiles(combined) }
+      } catch (e) {
+        if (!cancelled) console.error('GPS Viewer : impossible de charger les données du match.', e)
+      }
       finally { if (!cancelled) setLoading(false) }
     }
     load()
@@ -57,14 +69,12 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
         if (msg.requestId !== loadRequestRef.current) return
         loadRequestRef.current = null
         setStatus(`${msg.count} fichier(s) GPS chargé(s) (${msg.total} reçu(s)).`)
-        if (msg.errors?.length) {
-          setError(`Certains fichiers GPS n'ont pas pu être importés : ${msg.errors.join(' ')}`)
-        }
+        if (msg.errors?.length) console.error('GPS Viewer : fichiers non chargés.', msg.errors)
       }
       if (msg.type === 'GPS_MATCH_ERROR') {
         if (msg.requestId !== loadRequestRef.current) return
         loadRequestRef.current = null
-        setError(msg.message || 'Erreur de chargement GPS')
+        console.error('GPS Viewer : erreur de chargement GPS.', msg.message)
       }
       // En mode visualisation, aucun message GPS_SETTINGS_CHANGED / GPS_VIDEO_CHANGED n'est enregistré.
     }
@@ -94,7 +104,9 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
         if (!requestId) return
         loadRequestRef.current = requestId
         setStatus('Chargement des positions GPS…')
-      } catch (e) { if (!cancelled) setError(e.message || String(e)) }
+      } catch (e) {
+        if (!cancelled) console.error('GPS Viewer : impossible de transmettre les données GPS.', e)
+      }
       finally { if (!cancelled) setLoading(false) }
     }
     send()
@@ -105,7 +117,6 @@ export default function GpsViewerPage({ saison, journee, matchId, assetsBase = '
     {!matchId && <p>Sélectionnez un match.</p>}
     {loading && <p role="status">Chargement des données GPS…</p>}
     {status && <p role="status">{status}</p>}
-    {error && <p className="gps-viewer-error" role="alert">{error}</p>}
     {matchId && <iframe key={matchId} ref={frameRef} src={`${assetsBase.replace(/\/?$/, '/') }index.html?viewer=1`}
       title="Visualisation GPS" className="gps-viewer-frame"
       allow="fullscreen; autoplay" allowFullScreen onLoad={() => {

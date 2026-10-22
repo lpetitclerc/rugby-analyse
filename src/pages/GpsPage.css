@@ -131,6 +131,63 @@
   white-space: nowrap;
 }
 
+.gps-csv-mapping {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid #3c525d;
+  border-radius: 10px;
+  background: #15232c;
+}
+
+.gps-csv-mapping h2 {
+  margin: 0 0 8px;
+  color: #fff;
+  font-size: 17px;
+}
+
+.gps-csv-mapping > p {
+  color: #a6b8c0;
+}
+
+.gps-csv-mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.gps-csv-mapping-grid label {
+  display: grid;
+  gap: 6px;
+  color: #dce7e8;
+  font-size: 13px;
+}
+
+.gps-csv-mapping-grid select {
+  min-width: 0;
+  padding: 10px;
+  background: #101b22;
+  border: 1px solid #41545e;
+  border-radius: 7px;
+  color: #fff;
+}
+
+.gps-csv-mapping-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.gps-csv-confirm {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 7px;
+  background: #b9f27b;
+  color: #18311f;
+  font-weight: 700;
+}
+
 .gps-success {
   margin-top: 16px;
   padding: 12px 16px;
@@ -138,6 +195,78 @@
   border: 1px solid #23834a;
   border-radius: 8px;
   color: #86efac;
+}
+
+.gps-video-config {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  max-width: 700px;
+  margin-bottom: 12px;
+}
+
+.gps-video-config > label:first-child {
+  color: #fff;
+  font-weight: 700;
+}
+
+.gps-video-config select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.gps-video-config p {
+  margin: 0;
+  color: #aaa;
+}
+
+.gps-video-config .error {
+  color: #fecaca;
+}
+
+.gps-video-upload {
+  margin-top: 4px;
+}
+
+.gps-video-selected {
+  font-size: 12px;
+}
+
+.gps-page .error,
+.gps-import-warnings {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.gps-import-warnings {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid #7f3030;
+  border-radius: 8px;
+  background: #2b1111;
+  color: #fecaca;
+}
+
+.gps-import-warnings p {
+  margin: 0;
+}
+
+.gps-import-warnings details {
+  margin-top: 6px;
+}
+
+.gps-import-warnings summary {
+  cursor: pointer;
+}
+
+.gps-import-warnings ul {
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  margin: 8px 0 0;
+  padding-left: 22px;
+  overflow: auto;
 }
 
 .gps-tool-section {
@@ -152,7 +281,8 @@
 }
 
 @media (max-width: 850px) {
-  .gps-import-grid {
+  .gps-import-grid,
+  .gps-csv-mapping-grid {
     grid-template-columns: 1fr;
   }
 }

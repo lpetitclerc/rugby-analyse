@@ -5,9 +5,7 @@ let busy = false;
 function setBusy(value) {
   busy = value;
   window.terrainUI?.busy(value);
-  $('file').disabled = value || !worker;
   $('clear').disabled = value;
-  document.querySelector('.import').style.opacity = value ? '.5' : '1';
 }
 
 function importFiles(files) {
@@ -136,7 +134,6 @@ try {
     setBusy(false);
     worker.terminate();
     worker = null;
-    $('file').disabled = true;
 
     const message = event.message || 'Import indisponible. Vérifiez gps-worker.js.';
     $('message').textContent = message;
@@ -144,15 +141,9 @@ try {
   };
 
 } catch (error) {
-  $('file').disabled = true;
   $('message').textContent =
     'Impossible de démarrer le moteur GPS.';
 }
-
-$('file').onchange = (event) => {
-  importFiles(event.target.files);
-  event.target.value = '';
-};
 
 $('clear').onclick = () => {
   if (!window.gpsClear()) return;

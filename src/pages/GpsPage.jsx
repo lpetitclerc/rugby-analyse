@@ -2,12 +2,23 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { sendGpsMatchToFrame } from '../lib/gps-frame'
 import {
+  inspectGpsCsv,
+  mapGpsCsvContent,
+  suggestGpsCsvMapping
+} from '../lib/gps-csv'
+import {
   appendGpsFiles,
   discoverGpsFiles,
   normalizeGpsBucket,
   normalizeGpsDay,
   normalizeGpsFiles
 } from '../lib/gps-storage'
+import {
+  createGpsVideoReference,
+  createGpsVideoUrl,
+  discoverGpsVideos,
+  gpsVideoDirectory
+} from '../lib/gps-video-storage'
 import './GpsPage.css'
 
 const EMPTY_FILES = {
@@ -22,7 +33,6 @@ export default function GpsPage({
   assetsBase = '/gps/'
 }) {
   const frameRef = useRef(null)
-  const [videoUrl, setVideoUrl] = useState('')
   const [gpsVideo, setGpsVideo] = useState({})
   const settingsRef = useRef({})
   const gpsVideoRef = useRef({})
@@ -31,17 +41,25 @@ export default function GpsPage({
   activeMatchRef.current = matchId
   const [iframeReady, setIframeReady] = useState(false)
   const [loadedMatchId, setLoadedMatchId] = useState(null)
-  const [iframeVersion, setIframeVersion] = useState(0)
   const loadRequestRef = useRef(null)
   const loadingSequence = useRef(0)
 
   const [gpsFiles, setGpsFiles] = useState(EMPTY_FILES)
   const [loading, setLoading] = useState(false)
   const [uploadingTeam, setUploadingTeam] = useState(null)
+  const [pendingCsv, setPendingCsv] = useState(null)
+  const [csvError, setCsvError] = useState('')
   const [error, setError] = useState('')
+  const [importWarnings, setImportWarnings] = useState([])
   const [message, setMessage] = useState('')
+  const [videos, setVideos] = useState([])
+  const [selectedVideoPath, setSelectedVideoPath] = useState('')
+  const [videoLoading, setVideoLoading] = useState(false)
+  const [videoUploading, setVideoUploading] = useState(false)
+  const [videoError, setVideoError] = useState('')
+  const [videoListingFailed, setVideoListingFailed] = useState(false)
 
-  const gpsUrl = `${assetsBase.replace(/\/?$/, '/')}index.html`
+  const gpsUrl = `${assetsBase.replace(/\/?$/, '/')}index.html?admin=1`
 
   const bucket = normalizeGpsBucket(saison)
   const dossierJournee = normalizeGpsDay(journee)
@@ -66,13 +84,20 @@ export default function GpsPage({
     settingsRef.current = {}
     gpsVideoRef.current = {}
     setGpsVideo({})
-    setVideoUrl('')
+    setVideos([])
+    setSelectedVideoPath('')
+    setVideoError('')
+    setVideoListingFailed(false)
+    setPendingCsv(null)
+    setCsvError('')
     let cancelled = false
 
     async function chargerFichiers() {
       setGpsFiles(EMPTY_FILES)
       setError('')
+      setImportWarnings([])
       setMessage('')
+      setVideoLoading(Boolean(matchId))
 
       if (!matchId) {
         setLoading(false)
@@ -98,12 +123,12 @@ export default function GpsPage({
 
       if (queryError) {
         setError(queryError.message)
+        setVideoLoading(false)
       } else {
         const params = data.gps_parametres || {}
         settingsRef.current = params
-        gpsVideoRef.current = data.gps_video || {}
-        setGpsVideo(gpsVideoRef.current)
-        setVideoUrl(data.gps_video?.url || '')
+        gpsVideoRef.current = {}
+        setGpsVideo({})
         let fichiers = normalizeGpsFiles(data.gps_fichiers)
 
         try {
@@ -146,16 +171,52 @@ export default function GpsPage({
           console.error('Récupération GPS :', err)
           setError(err.message)
           setLoading(false)
+          setVideoLoading(false)
           return
         }
 
         if (cancelled) return
 
+        try {
+          const matchVideos = await discoverGpsVideos(supabase.storage, {
+            bucket,
+            journee: dossierJournee,
+            matchId
+          })
+          if (cancelled) return
+
+          setVideos(matchVideos)
+          const selectedVideo = matchVideos.find(
+            (video) => video.path === data.gps_video?.path
+          )
+
+          if (selectedVideo) {
+            const reference = createGpsVideoReference(selectedVideo)
+            const url = await createGpsVideoUrl(supabase.storage, reference, bucket)
+            if (cancelled) return
+            gpsVideoRef.current = { ...reference, url }
+            setGpsVideo(gpsVideoRef.current)
+            setSelectedVideoPath(selectedVideo.path)
+          } else {
+            gpsVideoRef.current = {}
+            setGpsVideo({})
+          }
+        } catch (err) {
+          if (cancelled) return
+          console.error('Récupération des vidéos du match :', err)
+          setVideoListingFailed(true)
+          setVideoError(`Impossible de charger les vidéos du match : ${err.message}`)
+        } finally {
+          if (!cancelled) setVideoLoading(false)
+        }
+
+        if (cancelled) return
         setGpsFiles(fichiers)
         setLoadedMatchId(matchId)
       }
 
       setLoading(false)
+      if (!matchId) setVideoLoading(false)
     }
 
     chargerFichiers()
@@ -181,20 +242,6 @@ export default function GpsPage({
 
     if (data?.matchId !== matchId) return
 
-    if (data.type === 'GPS_VIDEO_CHANGED' && data.video?.url) {
-      const url = data.video.url
-      supabase.from('match').update({gps_video:{url,type:'url'}})
-        .eq('uuid_match',matchId).select('gps_video').single()
-        .then(({data:saved,error:saveError})=>{
-          if (saveError) { setError(saveError.message); return }
-          if (activeMatchRef.current !== matchId) return
-          gpsVideoRef.current = saved.gps_video
-          setGpsVideo(saved.gps_video)
-          setVideoUrl(url)
-        })
-      return
-    }
-
     if (data.type === 'GPS_SETTINGS_CHANGED' && data.settings && typeof data.settings === 'object') {
       enregistrerParametres(data.settings, matchId)
       return
@@ -205,8 +252,8 @@ export default function GpsPage({
       loadRequestRef.current = null
       setMessage(`${data.count} fichier(s) GPS chargé(s) dans le terrain (${data.total} reçu(s)).`)
       if (data.errors?.length) {
-        setError(`Certains fichiers GPS n'ont pas pu être importés : ${data.errors.join(' ')}`)
-      }
+        setImportWarnings(data.errors)
+      } else setImportWarnings([])
     }
 
     if (data.type === 'GPS_MATCH_ERROR') {
@@ -303,8 +350,7 @@ export default function GpsPage({
   matchId,
   loading,
   gpsFiles,
-  bucket,
-  iframeVersion
+  bucket
 ]
 )
 
@@ -323,134 +369,198 @@ export default function GpsPage({
     }, 700)
   }
 
-  async function enregistrerVideo() {
-    if (!matchId) return
-    const url = videoUrl.trim()
-    if (url) {
-      try {
-        const parsed = new URL(url)
-        if (!['http:', 'https:'].includes(parsed.protocol)) throw Error()
-      } catch {
-        setError('Le lien vidéo doit être une URL http(s) valide.')
-        return
-      }
+  async function enregistrerVideo(video) {
+    if (!matchId || !video) return
+    setVideoLoading(true)
+    setVideoError('')
+    try {
+      const reference = createGpsVideoReference(video)
+      const url = await createGpsVideoUrl(supabase.storage, reference, bucket)
+      const { data, error: saveError } = await supabase.from('match')
+        .update({ gps_video: reference }).eq('uuid_match', matchId)
+        .select('gps_video').single()
+      if (saveError) throw saveError
+      if (activeMatchRef.current !== matchId) return
+
+      gpsVideoRef.current = { ...(data.gps_video || reference), url }
+      setGpsVideo(gpsVideoRef.current)
+      setSelectedVideoPath(video.path)
+      frameRef.current?.contentWindow?.postMessage(
+        { type: 'GPS_VIDEO_APPLY', matchId, video: gpsVideoRef.current },
+        window.location.origin
+      )
+      setMessage('Vidéo du match sélectionnée.')
+      return true
+    } catch (err) {
+      console.error('Sélection de la vidéo du match :', err)
+      setVideoError(`Impossible d’enregistrer la vidéo : ${err.message}`)
+      return false
+    } finally {
+      if (activeMatchRef.current === matchId) setVideoLoading(false)
     }
-    const value = { ...gpsVideoRef.current, url, type: 'url' }
-    const { data, error: saveError } = await supabase.from('match')
-      .update({ gps_video: value }).eq('uuid_match', matchId)
-      .select('gps_video').single()
-    if (saveError) { setError(saveError.message); return }
-    gpsVideoRef.current = data.gps_video || value
-    setGpsVideo(gpsVideoRef.current)
-    frameRef.current?.contentWindow?.postMessage(
-      { type: 'GPS_VIDEO_APPLY', matchId, video: data.gps_video || value },
-      window.location.origin
-    )
-    setMessage('Vidéo enregistrée pour ce match.')
   }
 
-  useEffect(() => () => clearTimeout(saveTimer.current), [])
-
-  async function importerFichiers(equipe, fileList) {
-    const fichiers = Array.from(fileList || [])
-
-    if (!canUpload || fichiers.length === 0) return
-
-    const fichiersInvalides = fichiers.filter(
-      (file) => !file.name.toLowerCase().endsWith('.csv')
-    )
-
-    if (fichiersInvalides.length > 0) {
-      setError('Seuls les fichiers CSV sont acceptés.')
+  async function importerVideo(fileList) {
+    const file = fileList?.[0]
+    if (!canUpload || !file) return
+    if (!/\.(mp4|webm)$/i.test(file.name)) {
+      setVideoError('Seuls les fichiers vidéo MP4 et WebM sont acceptés.')
       return
     }
 
+    setVideoUploading(true)
+    setVideoError('')
+    setMessage('')
+    let uploadedPath = ''
+    try {
+      const safeName = file.name
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9._-]/g, '_')
+      const directory = gpsVideoDirectory(dossierJournee, matchId)
+      uploadedPath = `${directory}/${crypto.randomUUID()}_${safeName}`
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(uploadedPath, file, {
+          contentType: file.type || (file.name.toLowerCase().endsWith('.webm')
+            ? 'video/webm'
+            : 'video/mp4'),
+          upsert: false
+        })
+      if (uploadError) throw uploadError
+
+      const video = {
+        id: uploadedPath,
+        nom: file.name,
+        bucket,
+        path: uploadedPath,
+        taille: file.size,
+        importe_le: new Date().toISOString()
+      }
+      setVideos([video])
+      if (!await enregistrerVideo(video)) {
+        throw new Error('La référence vidéo n’a pas pu être enregistrée.')
+      }
+      if (activeMatchRef.current !== matchId) return
+      setMessage('Vidéo téléversée et sélectionnée pour ce match.')
+    } catch (err) {
+      console.error('Téléversement vidéo :', err)
+      setVideoError(uploadedPath
+        ? `La vidéo a été téléversée, mais sa sélection a échoué : ${err.message}`
+        : `Impossible de téléverser la vidéo : ${err.message}`)
+    } finally {
+      if (activeMatchRef.current === matchId) setVideoUploading(false)
+    }
+  }
+
+  async function preparerImportCsv(team, fileList) {
+    const files = Array.from(fileList || [])
+    if (!files.length) return
+    setCsvError('')
+    try {
+      const { headers } = inspectGpsCsv(await files[0].text())
+      for (const file of files.slice(1)) {
+        const nextHeaders = inspectGpsCsv(await file.text()).headers
+        if (JSON.stringify(nextHeaders) !== JSON.stringify(headers)) {
+          throw new Error(
+            'Les fichiers sélectionnés doivent avoir les mêmes colonnes dans le même ordre. ' +
+            'Importez séparément ceux dont le format diffère.'
+          )
+        }
+      }
+      setPendingCsv({
+        equipe: team,
+        files,
+        headers,
+        mapping: suggestGpsCsvMapping(headers)
+      })
+    } catch (err) {
+      setPendingCsv(null)
+      setCsvError(`Impossible de lire les colonnes du CSV : ${err.message}`)
+    }
+  }
+
+  async function importerFichierGps() {
+    if (!pendingCsv || !canUpload) return
+
+    const { equipe, files, mapping } = pendingCsv
     setUploadingTeam(equipe)
+    setCsvError('')
     setError('')
     setMessage('')
-    const nouveauxFichiers = []
-    let phaseImport = 'upload'
+    const newReferences = []
 
     try {
-      for (const file of fichiers) {
-        // Préfixe unique pour éviter d'écraser un autre import
+      for (const file of files) {
+        const mappedContent = mapGpsCsvContent(await file.text(), mapping)
+        const mappedFile = new File([mappedContent], file.name, {
+          type: 'text/csv'
+        })
         const id = crypto.randomUUID()
-
-        const nomSecurise = file.name
+        const safeName = file.name
           .normalize('NFKD')
           .replace(/[\u0300-\u036f]/g, '')
           .replace(/[^a-zA-Z0-9._-]/g, '_')
-
-        const path =
-          `${dossierJournee}/gps/${matchId}/${equipe}/${id}_${nomSecurise}`
-        
-        console.log('Bucket GPS :', bucket)
-        console.log('Chemin GPS :', path)
+        const path = `${dossierJournee}/gps/${matchId}/${equipe}/${id}_${safeName}`
         const { error: uploadError } = await supabase.storage
           .from(bucket)
-          .upload(path, file, {
+          .upload(path, mappedFile, {
             contentType: 'text/csv',
             upsert: false
           })
-
         if (uploadError) throw uploadError
 
-        nouveauxFichiers.push({
+        newReferences.push({
           id,
           nom: file.name,
           path,
           bucket,
-          taille: file.size,
+          taille: mappedFile.size,
           importe_le: new Date().toISOString()
         })
       }
 
-      phaseImport = 'manifest'
-      // Read the latest manifest after uploads so concurrent completed imports are included.
       const { data: matchData, error: readError } = await supabase
         .from('match')
         .select('gps_fichiers')
         .eq('uuid_match', matchId)
         .single()
       if (readError) {
-        throw new Error(
-          `CSV téléversés, mais lecture du manifeste impossible : ${readError.message}`
-        )
+        throw new Error(`CSV téléversé, mais lecture du manifeste impossible : ${readError.message}`)
       }
+
       const updatedManifest = appendGpsFiles(
         matchData.gps_fichiers,
         equipe,
-        nouveauxFichiers
+        newReferences
       )
-
       const { data: saved, error: updateError } = await supabase
         .from('match')
         .update({ gps_fichiers: updatedManifest })
         .eq('uuid_match', matchId)
-        .select('gps_fichiers').single()
+        .select('gps_fichiers')
+        .single()
       if (updateError) {
         throw new Error(
-          `CSV téléversés, mais mise à jour du manifeste impossible : ${updateError.message}. ` +
-          'Le rechargement Admin pourra les retrouver dans Storage.'
+          `CSV téléversé, mais mise à jour du manifeste impossible : ${updateError.message}. ` +
+          'Le rechargement Admin pourra le retrouver dans Storage.'
         )
       }
-      setGpsFiles(normalizeGpsFiles(saved.gps_fichiers))
-      setIframeReady(false)
-      setIframeVersion((version) => version + 1)
-      setMessage(
-        `${nouveauxFichiers.length} fichier(s) importé(s) pour l'équipe ${equipe}.`
-      )
 
+      setGpsFiles(normalizeGpsFiles(saved.gps_fichiers))
+      setPendingCsv(null)
+      setMessage(`${newReferences.length} fichier(s) GPS importé(s) pour l'équipe ${equipe}.`)
     } catch (err) {
       console.error('Erreur import GPS :', err)
-      const details = err?.message || "Erreur lors de l'import GPS."
-      setError(phaseImport === 'upload' && nouveauxFichiers.length
-        ? `${details} ${nouveauxFichiers.length} fichier(s) ont déjà été téléversés et pourront être retrouvés au prochain chargement Admin.`
-        : details)
+      setCsvError(newReferences.length
+        ? `${newReferences.length} fichier(s) ont été téléversé(s), mais leur enregistrement a échoué : ${err.message}. Le rechargement Admin pourra les retrouver dans Storage.`
+        : err.message || "Erreur lors de l'import GPS.")
     } finally {
       setUploadingTeam(null)
     }
   }
+
+  useEffect(() => () => clearTimeout(saveTimer.current), [])
 
   return (
     <section className="gps-page">
@@ -462,7 +572,7 @@ export default function GpsPage({
           <p>
             {matchId
               ? `Saison ${saison || '—'} · Journée ${journee || '—'} · Match ${matchId}`
-              : 'Sélectionnez un match pour importer les données GPS.'}
+              : 'Sélectionnez un match pour consulter les données GPS.'}
           </p>
         </div>
 
@@ -479,92 +589,189 @@ export default function GpsPage({
         <div className="error">{error}</div>
       )}
 
+      {importWarnings.length > 0 && (
+        <section className="gps-import-warnings" role="alert">
+          <p>
+            {importWarnings.length} fichier(s) GPS ignoré(s). Les autres fichiers ont été chargés.
+          </p>
+          <details>
+            <summary>Afficher les fichiers concernés</summary>
+            <ul>
+              {importWarnings.map((warning, index) => (
+                <li key={`${index}-${warning}`}>{warning}</li>
+              ))}
+            </ul>
+          </details>
+        </section>
+      )}
+
       {message && (
         <div className="gps-success">{message}</div>
       )}
 
       <div className="gps-import-grid">
-
         {[
           { key: 'domicile', title: 'Équipe domicile' },
           { key: 'exterieur', title: 'Équipe extérieure' }
         ].map((team) => (
-
           <div className="gps-import-card" key={team.key}>
-
             <div className="gps-import-card-header">
               <h2>{team.title}</h2>
-              <span>
-                {gpsFiles[team.key].length} fichier(s)
-              </span>
+              <span>{gpsFiles[team.key].length} fichier(s)</span>
             </div>
-
             <label className="gps-upload-button">
               {uploadingTeam === team.key
-                ? 'Import en cours...'
-                : '＋ Importer les CSV des joueuses'}
-
+                ? 'Import en cours…'
+                : '＋ Importer un CSV GPS'}
               <input
                 type="file"
                 accept=".csv,text/csv"
                 multiple
-                disabled={
-                  !canUpload ||
-                  loading ||
-                  uploadingTeam !== null
-                }
+                disabled={!canUpload || loading || uploadingTeam !== null}
                 onChange={async (event) => {
-                  const files = event.target.files
-                  await importerFichiers(team.key, files)
+                  await preparerImportCsv(team.key, event.target.files)
                   event.target.value = ''
                 }}
               />
             </label>
-
             {loading ? (
-              <p>Chargement...</p>
+              <p>Chargement…</p>
             ) : (
               <div className="gps-files-list">
-
                 {gpsFiles[team.key].length === 0 ? (
                   <p>Aucun fichier GPS importé.</p>
                 ) : (
                   gpsFiles[team.key].map((file) => (
-                    <div
-                      className="gps-file-item"
-                      key={file.id || file.path}
-                    >
+                    <div className="gps-file-item" key={file.id || file.path}>
                       <span>📄 {file.nom}</span>
-                      <small>
-                        {Math.round((file.taille || 0) / 1024)} Ko
-                      </small>
+                      <small>{Math.round((file.taille || 0) / 1024)} Ko</small>
                     </div>
                   ))
                 )}
-
               </div>
             )}
-
           </div>
-
         ))}
-
       </div>
+
+      {pendingCsv && (
+        <section className="gps-csv-mapping" aria-labelledby="gps-csv-mapping-title">
+          <h2 id="gps-csv-mapping-title">Associer les colonnes du fichier CSV</h2>
+          <p>
+            {pendingCsv.files.length} fichier(s) · {pendingCsv.files[0].name}
+            {pendingCsv.files.length > 1 ? ` et ${pendingCsv.files.length - 1} autre(s)` : ''}
+            {' · '}{pendingCsv.equipe === 'domicile' ? 'Équipe domicile' : 'Équipe extérieure'}
+          </p>
+          <p>Le temps doit être au format HH:MM:SS avec les millisecondes facultatives.</p>
+          <div className="gps-csv-mapping-grid">
+            {[
+              { key: 'joueuse', label: 'Joueuse', required: true },
+              { key: 'temps', label: 'Temps', required: true },
+              { key: 'latitude', label: 'Latitude', required: true },
+              { key: 'longitude', label: 'Longitude', required: true },
+              { key: 'vitesse', label: 'Vitesse (optionnel)' },
+              { key: 'frequenceCardiaque', label: 'Fréquence cardiaque (optionnel)' }
+            ].map((field) => (
+              <label key={field.key}>
+                {field.label}
+                <select
+                  value={pendingCsv.mapping[field.key]}
+                  onChange={(event) => setPendingCsv((current) => ({
+                    ...current,
+                    mapping: {
+                      ...current.mapping,
+                      [field.key]: event.target.value === ''
+                        ? -1
+                        : Number(event.target.value)
+                    }
+                  }))}
+                >
+                  <option value={-1}>
+                    {field.required ? 'Choisir une colonne…' : 'Aucune'}
+                  </option>
+                  {pendingCsv.headers.map((header, index) => (
+                    <option key={`${index}-${header}`} value={index}>{header}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+          {csvError && <p className="error" role="alert">{csvError}</p>}
+          <div className="gps-csv-mapping-actions">
+            <button
+              type="button"
+              onClick={() => {
+                setPendingCsv(null)
+                setCsvError('')
+              }}
+              disabled={uploadingTeam !== null}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="gps-csv-confirm"
+              onClick={importerFichierGps}
+              disabled={!canUpload || uploadingTeam !== null}
+            >
+              {uploadingTeam ? 'Import en cours…' : 'Importer le CSV'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {!pendingCsv && csvError && (
+        <div className="error" role="alert">{csvError}</div>
+      )}
 
       <div className="gps-tool-section">
         <h2>Visualisation GPS et synchronisation vidéo</h2>
 
-        <div className="gps-video-config" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <input type="url" value={videoUrl}
-            onChange={e => setVideoUrl(e.target.value)}
-            placeholder="URL directe de la vidéo MP4 / WebM"
-            style={{ flex: 1 }} />
-          <button type="button" onClick={enregistrerVideo} disabled={!matchId}>
-            Enregistrer la vidéo
-          </button>
+        <div className="gps-video-config">
+          <label htmlFor="gps-match-video">Vidéo du match</label>
+          {videoError && <p className="error" role="alert">{videoError}</p>}
+          {videoLoading ? (
+            <p role="status">Recherche des vidéos dans Supabase…</p>
+          ) : videos.length > 0 ? (
+            <select
+              id="gps-match-video"
+              value={selectedVideoPath}
+              disabled={!matchId || videoLoading || videoUploading}
+              onChange={(event) => {
+                const video = videos.find((item) => item.path === event.target.value)
+                if (video) enregistrerVideo(video)
+              }}
+            >
+              <option value="">Choisir une vidéo du match…</option>
+              {videos.map((video) => (
+                <option key={video.path} value={video.path}>
+                  {video.nom}
+                </option>
+              ))}
+            </select>
+          ) : videoListingFailed ? null : (
+            <>
+              <p>Aucune vidéo n’est disponible pour ce match.</p>
+              <label className="gps-upload-button gps-video-upload">
+                {videoUploading ? 'Téléversement en cours…' : '＋ Importer une vidéo MP4 ou WebM'}
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm,.mp4,.webm"
+                  disabled={!canUpload || videoUploading || videoLoading}
+                  onChange={async (event) => {
+                    await importerVideo(event.target.files)
+                    event.target.value = ''
+                  }}
+                />
+              </label>
+            </>
+          )}
+          {gpsVideo.url && (
+            <p className="gps-video-selected">Vidéo sélectionnée : {gpsVideo.nom}</p>
+          )}
         </div>
         <iframe
-          key={`${matchId || 'aucun'}-${iframeVersion}`}
+          key={matchId || 'aucun'}
           ref={frameRef}
           src={gpsUrl}
           title="Animation GPS et synchronisation vidéo du match"

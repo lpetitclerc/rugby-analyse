@@ -14,6 +14,7 @@ Ce document fige le comportement actuel a preserver avant toute refonte du modul
 - `public/gps/fullscreen.js` est l'unique gestionnaire du plein ecran pour Admin et Viewer ; `viewer-controls.js` ne cree plus un second bouton ni un second cycle d'evenements plein ecran.
 - En Admin, le plein ecran natif masque les panneaux de configuration pour privilegier le terrain, avec un bouton de sortie dans la barre de lecture. En Viewer, le plein ecran conserve terrain, equipes et commandes.
 - Le Viewer deplace le conteneur du terrain dans une grille CSS geree par `viewer-layout.css` ; les listes domicile/exterieur restent des panneaux dedies. La grille passe de trois colonnes sur grand ecran a deux colonnes sous 900 px puis une colonne sous 520 px. La page Admin conserve sa structure et ses styles.
+- L'Admin presente les erreurs par fichier du Worker comme un resume compact avec la liste des fichiers repliable ; les erreurs critiques de chargement ou de sauvegarde restent des alertes visibles.
 
 ## Contrat Supabase
 
@@ -23,24 +24,27 @@ La ligne de `match` est identifiee par `uuid_match`. Le module utilise les colon
 
 - `gps_fichiers` : manifeste JSON avec les listes `domicile` et `exterieur`. Chaque entree peut contenir `id`, `nom`, `path`, `bucket`, `taille` et `importe_le`.
 - `gps_parametres` : objet de reglages du moteur. Les sous-objets actuellement utilises comprennent `affichage`, `terrain` et `synchronisation`.
-- `gps_video` : objet video, generalement `{ url, type: 'url' }`.
+- `gps_video` : reference vers une video Storage `{ type: 'storage', bucket, path, nom }`. Les URL signees sont temporaires et ne sont pas persistees.
 
-Le bucket est le nom de saison normalise : remplacer les tirets par des underscores et ajouter le prefixe `saison_` s'il est absent. Le chemin utilise par les imports Admin est :
+Le bucket est le nom de saison normalise : remplacer les tirets par des underscores et ajouter le prefixe `saison_` s'il est absent. Les fichiers CSV historiques utilisent le chemin :
 
 `J{journee}/gps/{uuid_match}/{domicile|exterieur}/{uuid}_{nom_de_fichier_securise}.csv`
 
 La journee est prefixee par `J` si necessaire. Les noms securises sont normalises sans accents puis les caracteres hors `[a-zA-Z0-9._-]` sont remplaces par `_`.
 
+Les videos MP4/WebM d'un match utilisent le meme bucket de saison et le chemin `J{journee}/video/{uuid_match}/{nom_de_fichier}`. Admin liste ce dossier, permet de choisir une video existante et propose l'upload uniquement si aucune video n'est presente. La reference de stockage est enregistree dans `match.gps_video`; une URL signee d'une heure est generee pour la lecture.
+
 ### Administration : comportement a preserver
 
 1. Au changement de contexte, Admin lit `gps_fichiers`, `gps_parametres` et `gps_video` sur la ligne du match.
-2. Admin liste les CSV presents dans les deux dossiers Storage, fusionne ces objets avec le manifeste par `path`, puis peut mettre a jour `match.gps_fichiers` pour y enregistrer les fichiers retrouves.
+2. Admin liste les CSV presents dans les deux dossiers Storage, fusionne ces objets avec le manifeste par `path`, puis peut mettre a jour `match.gps_fichiers` pour y enregistrer les fichiers retrouves. L'import CSV Admin permet de mapper joueuse, temps, latitude et longitude vers le format du moteur avant le televersement ; vitesse et frequence cardiaque sont facultatives.
 3. Viewer effectue la meme decouverte et fusion en memoire ; seul Admin persiste la reconciliation.
-4. L'import Admin televerse les fichiers dans Storage, relit le manifeste apres le televersement, puis ajoute les references sans remplacer celles deja presentes. Il n'efface pas les objets existants.
-5. Cette relecture reduit le risque d'ecrasement entre imports, mais une sequence lecture/ecriture JSON n'est pas atomique. Une garantie contre deux ecritures concurrentes requerrait une operation serveur atomique (par exemple une fonction RPC/SQL), a traiter separement avec le schema Supabase.
+4. Les fichiers CSV restent dans Storage ; le chargement Admin et Viewer les decouvre dans les dossiers par equipe, sans modification des objets existants.
+5. `gps_fichiers` reste un manifeste de references et Admin peut le reconcilier avec les objets retrouves.
 6. Apres telechargement des CSV, Admin envoie `GPS_SETTINGS_APPLY` et `GPS_LOAD_MATCH` a l'iframe. Les reglages sont restaures avant le traitement des fichiers.
-7. `GPS_SETTINGS_CHANGED` persiste les reglages avec un delai de regroupement de 700 ms. `GPS_VIDEO_CHANGED` persiste l'URL video. Le champ Video de l'interface Admin enregistre aussi `gps_video`.
+7. `GPS_SETTINGS_CHANGED` persiste les reglages avec un delai de regroupement de 700 ms. La selection video Admin persiste une reference Storage, jamais une URL signee.
 8. Les CSV restent dans Storage ; les mesures chargees et le bouton « Effacer les donnees » concernent l'etat du moteur dans le navigateur, pas la suppression des objets Supabase.
+9. L'interface Admin masque completement la liste des joueuses et ses controles ; le Viewer conserve ces fonctions.
 
 ### Viewer : contrat de consultation seule
 
@@ -49,6 +53,7 @@ La journee est prefixee par `J` si necessaire. Les noms securises sont normalise
 3. Le parent Viewer ne doit appeler aucune operation Supabase `insert`, `update`, `upsert` ou `delete`. Il ne persiste ni changements de reglages ni changement de video recus de l'iframe.
 4. Les couleurs, visibilites et synchronisation modifiees dans le Viewer ne sont pas des sauvegardes du match. Toute persistance future de ces choix necessite une decision produit et une autorisation explicites.
 5. L'etat du moteur reste partage avec le moteur Admin, mais le mode `viewer=1` masque les outils d'import et de configuration. Ces masquages d'interface ne constituent pas un controle d'autorisation Supabase.
+6. Les erreurs de chargement dans le Viewer ne sont pas affichees dans l'interface ; elles restent journalisees dans la console.
 
 ## Contrat commandes et video
 
@@ -58,7 +63,8 @@ La journee est prefixee par `J` si necessaire. Les noms securises sont normalise
 - La fenetre video est ouverte par action utilisateur et peut etre placee manuellement sur un second ecran ; le navigateur ou l'OS gere son placement.
 - Sans synchronisation, les timelines GPS et video sont independantes. Avec synchronisation, l'utilisateur aligne les instants puis active la liaison ; les controles GPS transmis au lecteur comprennent lecture/pause, recherche temporelle et vitesse, limites a la plage commune.
 - Fermer la fenetre video ou atteindre une limite de la plage commune doit laisser le terrain GPS utilisable.
-- La video locale est une URL `blob:` temporaire. Le stockage Admin actuel enregistre une URL HTTP(S), pas le fichier local.
+- La page Admin ne propose pas de video locale ni d'URL libre : elle lit les videos du dossier Storage du match et permet d'en importer une si le dossier est vide.
+- Le Viewer genere une URL signee temporaire a partir de la reference Storage en lecture seule ; il conserve la compatibilite avec les anciennes valeurs `gps_video.url`.
 
 ## Checklist de non-regression
 
@@ -66,11 +72,13 @@ Executer dans un environnement de test disposant d'un match et de CSV de test. P
 
 ### Administration
 
-- [ ] Selectionner saison, journee et match ; verifier que les CSV domicile et exterieur attendus apparaissent.
-- [ ] Importer un CSV pour chaque equipe ; verifier l'objet dans le bon chemin Storage, son entree dans `gps_fichiers` et ses joueuses/positions dans le terrain.
+- [ ] Selectionner saison, journee et match ; verifier que les CSV domicile et exterieur attendus sont charges.
+- [ ] Verifier que les CSV deja presents dans les dossiers des deux equipes sont decouverts et charges dans le terrain.
+- [ ] Importer un CSV avec des noms de colonnes differents ; mapper joueuse, temps, latitude et longitude, puis verifier les joueuses et positions chargees.
 - [ ] Recharger la page ; verifier que les fichiers et le terrain se rechargent.
-- [ ] Modifier terrain, affichage, visibilite/couleur d'une joueuse et vitesse ; attendre la sauvegarde puis recharger et verifier les reglages conserves.
-- [ ] Enregistrer une URL video HTTP(S) valide ; recharger et verifier qu'elle est restauree dans l'outil.
+- [ ] Verifier que le panneau Terrain et vue camera est ouvert par defaut, modifier terrain, affichage, visibilite d'une joueuse et vitesse ; attendre la sauvegarde puis recharger et verifier les reglages conserves.
+- [ ] Selectionner une video existante dans `J{journee}/video/{uuid_match}` ; recharger et verifier qu'elle est restauree dans l'outil.
+- [ ] Avec un match de test sans video, importer un MP4/WebM et verifier le chemin Storage, la reference `gps_video` et la lecture dans l'outil.
 - [ ] Verifier que « Effacer les donnees » n'efface ni l'objet Storage ni l'entree du manifeste.
 
 ### Viewer et donnees en lecture seule

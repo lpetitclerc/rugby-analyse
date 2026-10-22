@@ -4,12 +4,23 @@ import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 import { sendGpsMatchToFrame } from '../src/lib/gps-frame.js'
 import {
+  inspectGpsCsv,
+  mapGpsCsvContent,
+  suggestGpsCsvMapping
+} from '../src/lib/gps-csv.js'
+import {
   appendGpsFiles,
   discoverGpsFiles,
   normalizeGpsBucket,
   normalizeGpsDay,
   normalizeGpsFiles
 } from '../src/lib/gps-storage.js'
+import {
+  createGpsVideoReference,
+  createGpsVideoUrl,
+  discoverGpsVideos,
+  gpsVideoDirectory
+} from '../src/lib/gps-video-storage.js'
 
 test('normalizes season buckets and match days consistently', () => {
   assert.equal(normalizeGpsBucket('2025-2026'), 'saison_2025_2026')
@@ -17,6 +28,77 @@ test('normalizes season buckets and match days consistently', () => {
   assert.equal(normalizeGpsDay('15'), 'J15')
   assert.equal(normalizeGpsDay('j15'), 'j15')
   assert.equal(normalizeGpsDay(' J15 '), 'J15')
+})
+
+test('inspects CSV headers and suggests GPS field mappings', () => {
+  const inspected = inspectGpsCsv(
+    '\uFEFFPlayer Name,Time,Latitude,Longitude,Speed\n' +
+    'Alice,12:00:01,48.1,-1.6,5.2\n'
+  )
+
+  assert.deepEqual(inspected.headers, [
+    'Player Name', 'Time', 'Latitude', 'Longitude', 'Speed'
+  ])
+  assert.deepEqual(suggestGpsCsvMapping(inspected.headers), {
+    joueuse: 0,
+    temps: 1,
+    latitude: 2,
+    longitude: 3,
+    vitesse: 4,
+    frequenceCardiaque: -1
+  })
+})
+
+test('maps selected CSV columns into the GPS worker format', () => {
+  const mapped = mapGpsCsvContent(
+    'Latitude;Player;Longitude;Time;FC\n' +
+    '48,123;Alice;1,456;12:00:01;160\n',
+    {
+      joueuse: 1,
+      temps: 3,
+      latitude: 0,
+      longitude: 2,
+      vitesse: -1,
+      frequenceCardiaque: 4
+    }
+  )
+
+  assert.equal(mapped,
+    "nom d'affichage du joueur;temps;lat;lon;speed (m/s);rythme cardiaque\n" +
+    'Alice;12:00:01;48,123;1,456;;160'
+  )
+})
+
+test('preserves quoted CSV values and commas inside selected fields', () => {
+  const mapped = mapGpsCsvContent(
+    'Athlete,Time,Lat,Lon\n' +
+    '"Léa, A",12:00:01,"48,123","1,456"',
+    {
+      joueuse: 0,
+      temps: 1,
+      latitude: 2,
+      longitude: 3,
+      vitesse: -1,
+      frequenceCardiaque: -1
+    }
+  )
+
+  assert.equal(mapped,
+    "nom d'affichage du joueur;temps;lat;lon;speed (m/s);rythme cardiaque\n" +
+    'Léa, A;12:00:01;48,123;1,456;;'
+  )
+})
+
+test('rejects incomplete or duplicated required CSV mappings', () => {
+  const csv = 'name,time,lat,lon\nAlice,12:00:00,48,1'
+  assert.throws(
+    () => mapGpsCsvContent(csv, { joueuse: 0, temps: 1, latitude: -1, longitude: 3 }),
+    /Associez une colonne/
+  )
+  assert.throws(
+    () => mapGpsCsvContent(csv, { joueuse: 0, temps: 1, latitude: 2, longitude: 2 }),
+    /différente/
+  )
 })
 
 test('normalizes malformed manifests without dropping valid team entries', () => {
@@ -154,6 +236,77 @@ test('appends new references without overwriting existing manifest data or dupli
   assert.deepEqual(updated.exterieur, original.exterieur)
   assert.deepEqual(original.domicile, [{ path: 'existing.csv', nom: 'existing.csv', custom: true }])
   assert.throws(() => appendGpsFiles(original, 'inconnue', []), /Équipe GPS inconnue/)
+})
+
+test('discovers match videos from the season bucket and builds storage references', async () => {
+  let request
+  const videos = await discoverGpsVideos({
+    from(bucket) {
+      return {
+        async list(directory, options) {
+          request = { bucket, directory, options }
+          return {
+            data: [
+              { name: 'match.mp4', id: 'video-id', metadata: { size: 120 } },
+              { name: 'recording.webm' },
+              { name: 'notes.txt' }
+            ],
+            error: null
+          }
+        }
+      }
+    }
+  }, {
+    bucket: 'saison_2025_2026',
+    journee: 'J15',
+    matchId: 'match-uuid'
+  })
+
+  assert.deepEqual(request, {
+    bucket: 'saison_2025_2026',
+    directory: 'J15/video/match-uuid',
+    options: { limit: 1000, offset: 0 }
+  })
+  assert.equal(gpsVideoDirectory('J15', 'match-uuid'), 'J15/video/match-uuid')
+  assert.deepEqual(videos.map(({ path }) => path), [
+    'J15/video/match-uuid/match.mp4',
+    'J15/video/match-uuid/recording.webm'
+  ])
+  assert.deepEqual(createGpsVideoReference(videos[0]), {
+    type: 'storage',
+    bucket: 'saison_2025_2026',
+    path: 'J15/video/match-uuid/match.mp4',
+    nom: 'match.mp4'
+  })
+})
+
+test('creates temporary signed URLs for stored videos without requiring one for legacy URLs', async () => {
+  let signedRequest
+  const storage = {
+    from(bucket) {
+      return {
+        async createSignedUrl(path, expiresIn) {
+          signedRequest = { bucket, path, expiresIn }
+          return { data: { signedUrl: 'https://storage.example/signed-video' }, error: null }
+        }
+      }
+    }
+  }
+
+  assert.equal(await createGpsVideoUrl(storage, {
+    type: 'storage',
+    bucket: 'saison_2025_2026',
+    path: 'J15/video/match-uuid/match.mp4'
+  }), 'https://storage.example/signed-video')
+  assert.deepEqual(signedRequest, {
+    bucket: 'saison_2025_2026',
+    path: 'J15/video/match-uuid/match.mp4',
+    expiresIn: 3600
+  })
+  assert.equal(await createGpsVideoUrl(storage, {
+    type: 'url',
+    url: 'https://video.example/match.mp4'
+  }), 'https://video.example/match.mp4')
 })
 
 test('sends downloaded match files and settings to the frame in protocol order', async () => {
