@@ -21,6 +21,8 @@ import { supabase }
 
 import VideoPlayer
   from '../components/VideoPlayer'
+import { openVideoWindow }
+  from '../lib/video-window'
 
 import '../App.css'
 
@@ -44,6 +46,12 @@ function RucksPage({
     selectedPossession,
     setSelectedPossession
   ] = useState(null)
+
+  const [videoWindow, setVideoWindow] =
+    useState(null)
+
+  const [videoWindowError, setVideoWindowError] =
+    useState(null)
 
   const [teamFilter, setTeamFilter] =
   useState('all')
@@ -218,6 +226,26 @@ const {
 
   const statsVisiteur =
     calculerStats(rucksVisiteur)
+
+  function ouvrirVideo(possession) {
+    const popup = openVideoWindow(possession)
+
+    if (!popup) {
+      setVideoWindowError(
+        'Le navigateur a bloqué la fenêtre vidéo. Autorise les fenêtres pop-up pour ce site et réessaie.'
+      )
+      return
+    }
+
+    setVideoWindowError(null)
+    setVideoWindow(popup)
+    setSelectedPossession(possession)
+  }
+
+  function fermerVideo() {
+    setSelectedPossession(null)
+    setVideoWindow(null)
+  }
 
 
   if (loading) {
@@ -450,11 +478,17 @@ const {
         <PossessionContestTable
           rucks={filteredRucks}
           onPossessionClick={
-            setSelectedPossession
+            ouvrirVideo
           }
         />
 
       </section>
+
+      {videoWindowError && (
+        <div className="error" role="alert">
+          {videoWindowError}
+        </div>
+      )}
 
 <section className="analysis-card">
 
@@ -486,9 +520,8 @@ const {
             possession={selectedPossession}
             saison={saison}
             journee={journee}
-            onClose={() =>
-                setSelectedPossession(null)
-            }
+            playerWindow={videoWindow}
+            onClose={fermerVideo}
         />
 
       )}

@@ -75,7 +75,10 @@ function buildSankeyData(possessions) {
 
 export default function SankeyDiagram({
   possessions,
-  onLinkClick
+  onLinkClick,
+  onSelectionChange,
+  height = 650,
+  compact = false
 }) {
   const [selectedNode, setSelectedNode] = useState(null)
 
@@ -87,23 +90,31 @@ export default function SankeyDiagram({
       level: payload.level
     }
 
-    setSelectedNode((current) => {
-      if (
-        current?.name === selection.name &&
-        current?.level === selection.level
-      ) {
-        return null
-      }
+    const nextSelection =
+      selectedNode?.name === selection.name &&
+      selectedNode?.level === selection.level
+        ? null
+        : selection
 
-      return selection
-    })
+    setSelectedNode(nextSelection)
+    onSelectionChange?.(
+      nextSelection
+        ? possessions.filter((possession) => {
+            const name = nextSelection.level === 0
+              ? possession.type_debut_possession
+              : possession.type_fin_possession
+
+            return (name || 'Inconnu') === nextSelection.name
+          })
+        : possessions
+    )
   }
 
   return (
     <div
       style={{
         width: '100%',
-        height: '650px'
+        height: `${height}px`
       }}
     >
       <ResponsiveContainer width="100%" height="100%">
@@ -112,10 +123,10 @@ export default function SankeyDiagram({
           nodePadding={30}
           nodeWidth={18}
           margin={{
-            top: 30,
-            right: 150,
-            bottom: 30,
-            left: 150
+            top: compact ? 12 : 30,
+            right: compact ? 100 : 150,
+            bottom: compact ? 12 : 30,
+            left: compact ? 100 : 150
           }}
           iterations={32}
           linkCurvature={0.5}
@@ -123,12 +134,14 @@ export default function SankeyDiagram({
             <SankeyNode
               selectedNode={selectedNode}
               onNodeClick={handleNodeClick}
+              compact={compact}
             />
           }
           link={
             <SankeyLink
               selectedNode={selectedNode}
               onLinkClick={onLinkClick}
+              onSelectionChange={onSelectionChange}
             />
           }
         >
@@ -146,7 +159,8 @@ function SankeyNode({
   height,
   payload,
   selectedNode,
-  onNodeClick
+  onNodeClick,
+  compact
 }) {
   const isSelected =
     selectedNode?.name === payload?.name &&
@@ -169,11 +183,12 @@ function SankeyNode({
       />
 
       <text
-        x={x + width + 8}
+        x={payload.level === 0 ? x - 8 : x + width + 8}
         y={y + height / 2}
+        textAnchor={payload.level === 0 ? 'end' : 'start'}
         dominantBaseline="middle"
         fill={isSelected ? '#60a5fa' : '#e2e8f0'}
-        fontSize={13}
+        fontSize={compact ? 11 : 13}
         fontWeight={isSelected ? 700 : 400}
       >
         {payload.name}
@@ -192,7 +207,8 @@ function SankeyLink({
   linkWidth,
   payload,
   selectedNode,
-  onLinkClick
+  onLinkClick,
+  onSelectionChange
 }) {
   const path = `
     M${sourceX},${sourceY}
@@ -226,6 +242,7 @@ function SankeyLink({
 
   function handleClick() {
     if (payload?.possessions?.length) {
+      onSelectionChange?.(payload.possessions)
       onLinkClick?.(payload.possessions)
     }
   }

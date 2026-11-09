@@ -1,16 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import {
   supabase
 } from '../lib/supabase'
 
-const VIDEO_BUCKET =
-  import.meta.env.VITE_SUPABASE_VIDEO_BUCKET
-
 export default function VideoPlayer({
   possession,
   saison,
   journee,
+  playerWindow,
   onClose
 }) {
 
@@ -23,91 +22,95 @@ export default function VideoPlayer({
   const [error, setError] =
     useState(null)
 
+  const closeTimer = useRef(null)
+
   useEffect(() => {
 
     if (!possession) {
       return
     }
 
+    let active = true
+
+    async function chargerVideo() {
+      setLoading(true)
+      setError(null)
+      setVideoUrl(null)
+
+      const bucketName = saison
+      const filePath = `${journee}/${possession.uuid_possession}.mp4`
+
+      console.log('Bucket vidéo :', bucketName)
+      console.log('Chemin vidéo :', filePath)
+
+      const {
+        data,
+        error: queryError
+      } = await supabase.storage
+        .from(bucketName)
+        .createSignedUrl(filePath, 60 * 60)
+
+      if (!active) {
+        return
+      }
+
+      if (queryError) {
+        console.error('Erreur vidéo Supabase :', queryError)
+        setError(`Vidéo introuvable : ${bucketName}/${filePath}`)
+        setLoading(false)
+        return
+      }
+
+      console.log('URL vidéo :', data.signedUrl)
+      setVideoUrl(data.signedUrl)
+      setLoading(false)
+    }
+
     chargerVideo()
+    return () => {
+      active = false
+    }
+  }, [possession, saison, journee])
 
-  }, [possession])
+  useEffect(() => {
+    if (!playerWindow) {
+      return
+    }
 
-async function chargerVideo() {
+    const closeCheck = window.setInterval(() => {
+      if (playerWindow.closed) {
+        onClose()
+      }
+    }, 300)
 
-  setLoading(true)
-  setError(null)
-  setVideoUrl(null)
+    return () => window.clearInterval(closeCheck)
+  }, [playerWindow, onClose])
 
-  const uuid =
-    possession.uuid_possession
+  useEffect(() => {
+    window.clearTimeout(closeTimer.current)
 
-  // La saison correspond directement
-  // au nom du bucket Supabase.
-  //
-  // Exemple :
-  // bucket = saison_2025_2026
-  const bucketName = saison
+    return () => {
+      closeTimer.current = window.setTimeout(() => {
+        if (playerWindow && !playerWindow.closed) {
+          playerWindow.close()
+        }
+      }, 0)
+    }
+  }, [playerWindow])
 
-  // Chemin à l'intérieur du bucket :
-  // J15/UUID.mp4
-  const filePath =
-    `${journee}/${uuid}.mp4`
-
-  console.log(
-    'Bucket vidéo :',
-    bucketName
-  )
-
-  console.log(
-    'Chemin vidéo :',
-    filePath
-  )
-
-  const {
-    data,
-    error
-  } = await supabase.storage
-    .from(bucketName)
-    .createSignedUrl(
-      filePath,
-      60 * 60
-    )
-
-  if (error) {
-
-    console.error(
-      'Erreur vidéo Supabase :',
-      error
-    )
-
-    setError(
-      `Vidéo introuvable : ${bucketName}/${filePath}`
-    )
-
-    setLoading(false)
-
-    return
+  function closeVideo() {
+    if (playerWindow && !playerWindow.closed) {
+      playerWindow.close()
+    }
+    onClose()
   }
 
-  console.log(
-    'URL vidéo :',
-    data.signedUrl
-  )
-
-  setVideoUrl(
-    data.signedUrl
-  )
-
-  setLoading(false)
-}
-
-  if (!possession) {
+  if (!possession || !playerWindow || playerWindow.closed) {
     return null
   }
 
-  return (
-    <div className="video-panel">
+  const player = (
+    <div className="video-panel video-detached-panel">
 
       <div className="video-header">
 
@@ -126,7 +129,9 @@ async function chargerVideo() {
 
         <button
           className="close-button"
-          onClick={onClose}
+          onClick={closeVideo}
+          type="button"
+          aria-label="Fermer la vidéo"
         >
           ✕
         </button>
@@ -213,4 +218,6 @@ async function chargerVideo() {
 
     </div>
   )
+
+  return createPortal(player, playerWindow.document.body)
 }
