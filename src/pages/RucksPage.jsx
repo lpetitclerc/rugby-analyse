@@ -18,6 +18,10 @@ import {
 
 import { supabase }
   from '../lib/supabase'
+import {
+  getDurationCategory,
+  getDurationClass
+} from '../lib/rucks'
 
 import VideoPlayer
   from '../components/VideoPlayer'
@@ -568,24 +572,6 @@ function RugbyPitch({ rucks = [] }) {
     useState('contest')
 
 
-  function getDurationClass(duration) {
-
-    if (duration === '-3s') {
-      return 'duration-fast'
-    }
-
-    if (duration === '3-6s') {
-      return 'duration-medium'
-    }
-
-    if (duration === '+6s') {
-      return 'duration-slow'
-    }
-
-    return 'duration-unknown'
-  }
-
-
   return (
 
     <div className="pitch-container">
@@ -652,18 +638,14 @@ function RugbyPitch({ rucks = [] }) {
 
         <div className="pitch-legend">
 
+          {[1, 2, 3, 4, 5, 6].map(duration => (
+            <span key={duration}>
+              <i className={`legend-dot duration-${duration}`} />
+              {duration}
+            </span>
+          ))}
           <span>
-            <i className="legend-dot duration-fast" />
-            -3s
-          </span>
-
-          <span>
-            <i className="legend-dot duration-medium" />
-            3-6s
-          </span>
-
-          <span>
-            <i className="legend-dot duration-slow" />
+            <i className="legend-dot duration-over-6" />
             +6s
           </span>
 
@@ -766,7 +748,7 @@ function RugbyPitch({ rucks = [] }) {
 
               title={
                 `Ruck ${ruck.ordre_ruck}
-Durée : ${ruck.duree_ruck ?? '-'}
+Durée : ${getDurationCategory(ruck.duree_ruck) ?? '-'}
 Contest : ${isContest ? 'oui' : 'non'}
 X : ${x} m
 Y : ${y} m`

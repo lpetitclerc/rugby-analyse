@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { supabase } from '../lib/supabase'
+import {
+  calculerGainTerrainStats,
+  getGainTerrainCategory,
+  getGainTerrainClass,
+  getDurationCategory,
+  getDurationClass
+} from '../lib/rucks'
 
 import SankeyDiagram from '../components/SankeyDiagram'
 
@@ -152,6 +159,11 @@ function PossessionsPage({
   const filteredRucks = useMemo(
     () => rucks.filter((ruck) => terrainPossessionIds.has(ruck.uuid_possession)),
     [rucks, terrainPossessionIds]
+  )
+
+  const gainTerrainStats = useMemo(
+    () => calculerGainTerrainStats(filteredRucks),
+    [filteredRucks]
   )
 
   const tablePossessions = useMemo(() => {
@@ -333,6 +345,7 @@ function PossessionsPage({
                   onViewModeChange={setRuckViewMode}
                 />
               )}
+              <GainTerrainKpis stats={gainTerrainStats} />
               </section>
             </div>
 
@@ -394,20 +407,23 @@ function PossessionsPage({
   )
 }
 
-function getDurationClass(duration) {
-  if (duration === '-3s') {
-    return 'duration-fast'
-  }
-
-  if (duration === '3-6s') {
-    return 'duration-medium'
-  }
-
-  if (duration === '+6s') {
-    return 'duration-slow'
-  }
-
-  return 'duration-unknown'
+function GainTerrainKpis({ stats }) {
+  return (
+    <div className="gain-terrain-kpis" aria-label="Bilan du gain de terrain">
+      <div className="gain-terrain-kpi gain-terrain-positive">
+        <strong>{stats.gain}</strong>
+        <span>Gain terrain (&gt; +2 m)</span>
+      </div>
+      <div className="gain-terrain-kpi gain-terrain-neutral">
+        <strong>{stats.neutre}</strong>
+        <span>Neutre (de -2 à +2 m)</span>
+      </div>
+      <div className="gain-terrain-kpi gain-terrain-negative">
+        <strong>{stats.perte}</strong>
+        <span>Perte de terrain (&lt; -2 m)</span>
+      </div>
+    </div>
+  )
 }
 
 function RuckTerrain({ rucks, viewMode, onViewModeChange }) {
@@ -428,6 +444,13 @@ function RuckTerrain({ rucks, viewMode, onViewModeChange }) {
         >
           Durée ruck
         </button>
+        <button
+          type="button"
+          className={`pitch-view-button ${viewMode === 'gain' ? 'active' : ''}`}
+          onClick={() => onViewModeChange('gain')}
+        >
+          Gain terrain
+        </button>
       </div>
 
       {viewMode === 'contest' ? (
@@ -441,19 +464,32 @@ function RuckTerrain({ rucks, viewMode, onViewModeChange }) {
             Contest non
           </span>
         </div>
+      ) : viewMode === 'duration' ? (
+        <div className="pitch-legend">
+          {[1, 2, 3, 4, 5, 6].map((duration) => (
+            <span key={duration}>
+              <i className={`legend-dot duration-${duration}`} />
+              {duration}
+            </span>
+          ))}
+          <span>
+            <i className="legend-dot duration-over-6" />
+            +6s
+          </span>
+        </div>
       ) : (
         <div className="pitch-legend">
           <span>
-            <i className="legend-dot duration-fast" />
-            -3s
+            <i className="legend-dot gain-terrain-positive" />
+            Gain terrain (&gt; +2 m)
           </span>
           <span>
-            <i className="legend-dot duration-medium" />
-            3-6s
+            <i className="legend-dot gain-terrain-neutral" />
+            Neutre (−2 à +2 m)
           </span>
           <span>
-            <i className="legend-dot duration-slow" />
-            +6s
+            <i className="legend-dot gain-terrain-negative" />
+            Perte de terrain (&lt; −2 m)
           </span>
         </div>
       )}
@@ -477,7 +513,11 @@ function RuckTerrain({ rucks, viewMode, onViewModeChange }) {
           const isContest = ruck.contest_ruck === 'oui'
           const pointClass = viewMode === 'contest'
             ? `ruck-point ${isContest ? 'contest' : 'no-contest'}`
-            : `ruck-point ${getDurationClass(ruck.duree_ruck)}`
+            : viewMode === 'duration'
+              ? `ruck-point ${getDurationClass(ruck.duree_ruck)}`
+              : `ruck-point ${getGainTerrainClass(ruck.gain_metres_ruck)}`
+
+          const gainCategory = getGainTerrainCategory(ruck.gain_metres_ruck)
 
           return (
             <div
@@ -487,7 +527,7 @@ function RuckTerrain({ rucks, viewMode, onViewModeChange }) {
                 left: `${x}%`,
                 top: `${100 - (y / 70) * 100}%`
               }}
-              title={`Possession ${ruck.ordre_possession} · Ruck ${ruck.ordre_ruck}\nDurée : ${ruck.duree_ruck ?? '-'}\nContest : ${isContest ? 'oui' : 'non'}\nX : ${x} m\nY : ${y} m`}
+              title={`Possession ${ruck.ordre_possession} · Ruck ${ruck.ordre_ruck}\nDurée : ${getDurationCategory(ruck.duree_ruck) || '-'}\nGain terrain : ${gainCategory || 'inconnu'}\nContest : ${isContest ? 'oui' : 'non'}\nX : ${x} m\nY : ${y} m`}
             />
           )
         })}
@@ -566,14 +606,20 @@ function PossessionRuckTable({
                   key={ruck.uuid_ruck}
                   className={`contest-dot ${viewMode === 'contest'
                     ? (ruck.contest_ruck === 'oui' ? 'yes' : 'no')
-                    : getDurationClass(ruck.duree_ruck)}`}
+                    : viewMode === 'duration'
+                      ? `${getDurationClass(ruck.duree_ruck)} duration-label`
+                      : getGainTerrainClass(ruck.gain_metres_ruck)}`}
                   title={`Ruck ${ruck.ordre_ruck} · ${
                     viewMode === 'contest'
                       ? `Contest ${ruck.contest_ruck || 'inconnu'}`
-                      : `Durée ${ruck.duree_ruck || 'inconnue'}`
+                      : viewMode === 'duration'
+                        ? `Durée ${getDurationCategory(ruck.duree_ruck) || 'inconnue'}`
+                        : `Gain terrain ${getGainTerrainCategory(ruck.gain_metres_ruck) || 'inconnu'}`
                   }`}
                 >
-                  {ruck.ordre_ruck}
+                  {viewMode === 'duration'
+                    ? getDurationCategory(ruck.duree_ruck) || '?'
+                    : ruck.ordre_ruck}
                 </div>
               )) : (
                 <span className="possession-no-rucks">Aucun ruck</span>
